@@ -10,6 +10,8 @@ type Document = {
   status: string
   file_url: string | null
   followup_count: number
+  extracted_json: any
+  flags: any
 }
 
 type ClientInfo = {
@@ -56,64 +58,96 @@ export default function ClientPortal() {
   }
 
   async function handleUpload(docId: string, file: File) {
-  if (!clientInfo) return
-  setUploading(docId)
-  try {
-    const fileExt = file.name.split('.').pop()
-    const fileName = `${clientInfo.id}/${docId}.${fileExt}`
+    if (!clientInfo) return
+    setUploading(docId)
+    try {
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${clientInfo.id}/${docId}.${fileExt}`
 
-    const { error: uploadError } = await supabase.storage
-      .from('documents')
-      .upload(fileName, file, { upsert: true })
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(fileName, file, { upsert: true })
 
-    if (uploadError) throw uploadError
+      if (uploadError) throw uploadError
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('documents')
-      .getPublicUrl(fileName)
+      const { data: { publicUrl } } = supabase.storage
+        .from('documents')
+        .getPublicUrl(fileName)
 
-    await supabase
-      .from('documents')
-      .update({
-        status: 'uploaded',
-        file_url: publicUrl,
-        extraction_status: 'processing'
-      })
-      .eq('id', docId)
-
-    await loadPortal()
-
-    // Trigger AI extraction in background
-    const docName = documents.find(d => d.id === docId)?.name || 'document'
-    const extractRes = await fetch('/api/extract', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fileUrl: publicUrl,
-        documentName: docName
-      })
-    })
-
-    const extractData = await extractRes.json()
-
-    if (extractData.extracted) {
       await supabase
         .from('documents')
         .update({
-          extracted_json: extractData.extracted,
-          extraction_status: 'done',
-          flags: extractData.extracted.flags
+          status: 'uploaded',
+          file_url: publicUrl,
+          extraction_status: 'processing'
         })
         .eq('id', docId)
+
+      await loadPortal()
+
+      // Trigger AI extraction
+      const docName = documents.find(d => d.id === docId)?.name || 'document'
+      const extractRes = await fetch('/api/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileUrl: publicUrl,
+          documentName: docName
+        })
+      })
+
+      const extractData = await extractRes.json()
+
+      if (extractData.extracted) {
+        await supabase
+          .from('documents')
+          .update({
+            extracted_json: extractData.extracted,
+            extraction_status: 'done',
+            flags: extractData.extracted.flags
+          })
+          .eq('id', docId)
+      }
+
+      await loadPortal()
+
+    } catch (e: any) {
+      alert('Upload failed: ' + e.message)
     }
-
-    await loadPortal()
-
-  } catch (e: any) {
-    alert('Upload failed: ' + e.message)
+    setUploading(null)
   }
-  setUploading(null)
-}
+
+  async function handleDelete(docId: string) {
+    if (!clientInfo) return
+    const confirmed = window.confirm('Delete this uploaded file?')
+    if (!confirmed) return
+    try {
+      const doc = documents.find(d => d.id === docId)
+      if (!doc?.file_url) return
+
+      const urlParts = doc.file_url.split('/')
+      const fileName = `${clientInfo.id}/${docId}.${urlParts[urlParts.length - 1].split('.').pop()}`
+
+      await supabase.storage
+        .from('documents')
+        .remove([fileName])
+
+      await supabase
+        .from('documents')
+        .update({
+          status: 'pending',
+          file_url: null,
+          extracted_json: null,
+          extraction_status: 'pending',
+          flags: null
+        })
+        .eq('id', docId)
+
+      await loadPortal()
+    } catch (e: any) {
+      alert('Delete failed: ' + e.message)
+    }
+  }
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -196,6 +230,11 @@ export default function ClientPortal() {
 
         {activeTab === 'checklist' && (
           <div className="space-y-3">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+              <p className="text-xs text-blue-700">
+                📎 Accepted: PDF, JPG, PNG · For Word files please save as PDF first
+              </p>
+            </div>
             {documents.length === 0 ? (
               <div className="bg-white border border-dashed border-gray-300 rounded-xl p-12 text-center">
                 <p className="text-gray-400 text-sm">No documents assigned yet</p>
@@ -219,6 +258,33 @@ export default function ClientPortal() {
                             {doc.followup_count} reminder{doc.followup_count > 1 ? 's' : ''} sent by CA
                           </p>
                         )}
+                        {doc.extracted_json && (
+                          <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-lg p-2">
+                            <p className="text-xs font-medium text-emerald-700 mb-1">
+                              ✨ AI extracted data
+                            </p>
+                            {Object.entries(doc.extracted_json)
+                              .filter(([k, v]) => v && k !== 'flags' && k !== 'document_type')
+                              .slice(0, 5)
+                              .map(([key, value]) => (
+                                <div key={key} className="flex gap-2 text-xs">
+                                  <span className="text-gray-500 capitalize">
+                                    {key.replace(/_/g, ' ')}:
+                                  </span>
+                                  <span className="text-gray-800 font-medium">
+                                    {String(value)}
+                                  </span>
+                                </div>
+                              ))}
+                            {doc.flags && Array.isArray(doc.flags) && doc.flags.length > 0 && (
+                              <div className="mt-1 pt-1 border-t border-emerald-200">
+                                {doc.flags.map((flag: string, i: number) => (
+                                  <p key={i} className="text-xs text-red-600">⚠️ {flag}</p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
@@ -232,21 +298,32 @@ export default function ClientPortal() {
                          doc.status === 'overdue' ? 'Overdue' : 'Pending'}
                       </span>
                       {doc.status !== 'verified' && (
-                        <label className={`text-xs px-3 py-1.5 rounded-lg border cursor-pointer
-                          ${uploading === doc.id
-                            ? 'bg-gray-100 text-gray-400 border-gray-200'
-                            : 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700'}`}>
-                          {uploading === doc.id ? 'Uploading...' : 'Upload'}
-                          <input
-                            type="file"
-                            className="hidden"
-                            accept=".pdf,.jpg,.jpeg,.png,.webp"
-                            disabled={uploading === doc.id}
-                            onChange={e => {
-                              const file = e.target.files?.[0]
-                              if (file) handleUpload(doc.id, file)
-                            }} />
-                        </label>
+                        <div className="flex items-center gap-2">
+                          <label className={`text-xs px-3 py-1.5 rounded-lg border cursor-pointer
+                            ${uploading === doc.id
+                              ? 'bg-gray-100 text-gray-400 border-gray-200'
+                              : 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700'}`}>
+                            {uploading === doc.id
+                              ? 'Uploading...'
+                              : doc.status === 'uploaded' ? '🔄 Re-upload' : '↑ Upload'}
+                            <input
+                              type="file"
+                              className="hidden"
+                              accept=".pdf,.jpg,.jpeg,.png,.webp"
+                              disabled={uploading === doc.id}
+                              onChange={e => {
+                                const file = e.target.files?.[0]
+                                if (file) handleUpload(doc.id, file)
+                              }} />
+                          </label>
+                          {doc.status === 'uploaded' && (
+                            <button
+                              onClick={() => handleDelete(doc.id)}
+                              className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50">
+                              🗑️
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -258,10 +335,9 @@ export default function ClientPortal() {
 
         {activeTab === 'uploaded' && (
           <div className="space-y-3">
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-3">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
               <p className="text-xs text-blue-700">
-                📎 Accepted formats: PDF, JPG, PNG, WEBP · 
-                For Word documents, please save as PDF before uploading
+                📎 Accepted formats: PDF, JPG, PNG · For Word documents please save as PDF first
               </p>
             </div>
             {documents.filter(d => d.file_url).length === 0 ? (
@@ -296,7 +372,7 @@ export default function ClientPortal() {
         {overdue > 0 && (
           <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-4">
             <p className="text-sm text-red-700 font-medium">
-              You have {overdue} overdue document{overdue > 1 ? 's' : ''}
+              ⚠️ You have {overdue} overdue document{overdue > 1 ? 's' : ''}
             </p>
             <p className="text-xs text-red-600 mt-1">
               Please upload them immediately to avoid filing delays.
