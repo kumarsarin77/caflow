@@ -68,10 +68,16 @@ export default function CADashboard() {
           <span className="text-sm font-normal text-gray-500 ml-2">{firmName}</span>
         </h1>
         <div className="flex items-center gap-3">
-          <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5">
-            <span className="text-xs text-gray-500">Firm code: </span>
-            <span className="text-sm font-medium text-emerald-600 tracking-wider">{firmCode}</span>
-          </div>
+          <div 
+  className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5 cursor-pointer hover:bg-emerald-100"
+  onClick={() => {
+    navigator.clipboard.writeText(firmCode)
+    alert('Firm code copied!')
+  }}>
+  <span className="text-xs text-gray-500">Firm code: </span>
+  <span className="text-sm font-medium text-emerald-600 tracking-wider">{firmCode}</span>
+  <span className="text-xs text-gray-400 ml-2">📋</span>
+</div>
           <button
             onClick={handleSignOut}
             className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5">
