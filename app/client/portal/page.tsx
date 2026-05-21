@@ -240,7 +240,7 @@ export default function ClientPortal() {
                           <input
                             type="file"
                             className="hidden"
-                            accept=".pdf,.jpg,.jpeg,.png"
+                            accept=".pdf,.jpg,.jpeg,.png,.webp"
                             disabled={uploading === doc.id}
                             onChange={e => {
                               const file = e.target.files?.[0]
@@ -258,6 +258,12 @@ export default function ClientPortal() {
 
         {activeTab === 'uploaded' && (
           <div className="space-y-3">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-3">
+              <p className="text-xs text-blue-700">
+                📎 Accepted formats: PDF, JPG, PNG, WEBP · 
+                For Word documents, please save as PDF before uploading
+              </p>
+            </div>
             {documents.filter(d => d.file_url).length === 0 ? (
               <div className="bg-white border border-dashed border-gray-300 rounded-xl p-12 text-center">
                 <p className="text-gray-400 text-sm">No files uploaded yet</p>
