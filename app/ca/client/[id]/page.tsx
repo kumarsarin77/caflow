@@ -207,8 +207,37 @@ export default function ClientDetail() {
                   <div>
                     <p className="text-sm text-gray-800">{doc.name}</p>
                     <p className="text-xs text-gray-400">
-                      Due: {doc.due_date} · Follow-ups: {doc.followup_count}
-                    </p>
+  Due: {doc.due_date} · Follow-ups: {doc.followup_count}
+</p>
+{doc.extracted_json && (
+  <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-lg p-2">
+    <p className="text-xs font-medium text-emerald-700 mb-1">
+      AI extracted data
+    </p>
+    {Object.entries(doc.extracted_json)
+      .filter(([k, v]) => v && k !== 'flags' && k !== 'document_type')
+      .map(([key, value]) => (
+        <div key={key} className="flex gap-2 text-xs">
+          <span className="text-gray-500 capitalize">
+            {key.replace(/_/g, ' ')}:
+          </span>
+          <span className="text-gray-800 font-medium">
+            {String(value)}
+          </span>
+        </div>
+      ))}
+    {doc.flags && Array.isArray(doc.flags) && doc.flags.length > 0 && (
+      <div className="mt-2 bg-red-50 border border-red-200 rounded-lg p-2">
+        <p className="text-xs font-medium text-red-700 mb-1">
+          Flags
+        </p>
+        {doc.flags.map((flag: string, i: number) => (
+          <p key={i} className="text-xs text-red-600">• {flag}</p>
+        ))}
+      </div>
+    )}
+  </div>
+)}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

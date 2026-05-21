@@ -56,33 +56,64 @@ export default function ClientPortal() {
   }
 
   async function handleUpload(docId: string, file: File) {
-    if (!clientInfo) return
-    setUploading(docId)
-    try {
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${clientInfo.id}/${docId}.${fileExt}`
+  if (!clientInfo) return
+  setUploading(docId)
+  try {
+    const fileExt = file.name.split('.').pop()
+    const fileName = `${clientInfo.id}/${docId}.${fileExt}`
 
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(fileName, file, { upsert: true })
+    const { error: uploadError } = await supabase.storage
+      .from('documents')
+      .upload(fileName, file, { upsert: true })
 
-      if (uploadError) throw uploadError
+    if (uploadError) throw uploadError
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('documents')
-        .getPublicUrl(fileName)
+    const { data: { publicUrl } } = supabase.storage
+      .from('documents')
+      .getPublicUrl(fileName)
 
+    await supabase
+      .from('documents')
+      .update({
+        status: 'uploaded',
+        file_url: publicUrl,
+        extraction_status: 'processing'
+      })
+      .eq('id', docId)
+
+    await loadPortal()
+
+    // Trigger AI extraction in background
+    const docName = documents.find(d => d.id === docId)?.name || 'document'
+    const extractRes = await fetch('/api/extract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileUrl: publicUrl,
+        documentName: docName
+      })
+    })
+
+    const extractData = await extractRes.json()
+
+    if (extractData.extracted) {
       await supabase
         .from('documents')
-        .update({ status: 'uploaded', file_url: publicUrl })
+        .update({
+          extracted_json: extractData.extracted,
+          extraction_status: 'done',
+          flags: extractData.extracted.flags
+        })
         .eq('id', docId)
-
-      await loadPortal()
-    } catch (e: any) {
-      alert('Upload failed: ' + e.message)
     }
-    setUploading(null)
+
+    await loadPortal()
+
+  } catch (e: any) {
+    alert('Upload failed: ' + e.message)
   }
+  setUploading(null)
+}
 
   async function handleSignOut() {
     await supabase.auth.signOut()
