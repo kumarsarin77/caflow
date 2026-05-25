@@ -41,7 +41,20 @@ const engagementDocs: Record<string, string[]> = {
     'Contractor payment details',
     'TDS certificates received',
     'GST invoices (Q4)'
+  ],
+  'Bookkeeping — FY 2024-25': [
+    'Bank statements (all months)',
+    'Cash book',
+    'Purchase bills',
+    'Sales invoices',
+    'Expense vouchers'
   ]
+}
+
+type Engagement = {
+  type: string
+  period: string
+  docs: string[]
 }
 
 export default function AddClient() {
@@ -49,40 +62,61 @@ export default function AddClient() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [firmId, setFirmId] = useState('')
-  const [selectedDocs, setSelectedDocs] = useState<string[]>([])
+  const [engagements, setEngagements] = useState<Engagement[]>([])
+  const [showEngagementPicker, setShowEngagementPicker] = useState(false)
+  const [newEngType, setNewEngType] = useState('ITR filing — AY 2025-26')
   const [form, setForm] = useState({
     full_name: '',
     email: '',
     phone: '',
     pan: '',
-    engagement_type: 'ITR filing — AY 2025-26'
   })
 
   useEffect(() => {
     loadFirm()
   }, [])
 
-  useEffect(() => {
-    setSelectedDocs(engagementDocs[form.engagement_type] || [])
-  }, [form.engagement_type])
-
   async function loadFirm() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/ca/login'); return }
-
     const { data: firm } = await supabase
       .from('firms')
       .select('id')
       .eq('user_id', user.id)
       .single()
-
     if (firm) setFirmId(firm.id)
   }
 
-  function toggleDoc(doc: string) {
-    setSelectedDocs(prev =>
-      prev.includes(doc) ? prev.filter(d => d !== doc) : [...prev, doc]
-    )
+  function addEngagement() {
+    const docs = engagementDocs[newEngType] || []
+    const already = engagements.find(e => e.type === newEngType)
+    if (already) {
+      setError('This engagement type is already added')
+      return
+    }
+    setEngagements(prev => [...prev, {
+      type: newEngType,
+      period: '',
+      docs: [...docs]
+    }])
+    setShowEngagementPicker(false)
+    setError('')
+  }
+
+  function removeEngagement(index: number) {
+    setEngagements(prev => prev.filter((_, i) => i !== index))
+  }
+
+  function toggleDoc(engIndex: number, doc: string) {
+    setEngagements(prev => prev.map((e, i) => {
+      if (i !== engIndex) return e
+      return {
+        ...e,
+        docs: e.docs.includes(doc)
+          ? e.docs.filter(d => d !== doc)
+          : [...e.docs, doc]
+      }
+    }))
   }
 
   async function handleAddClient() {
@@ -90,9 +124,14 @@ export default function AddClient() {
       setError('Name and email are required')
       return
     }
+    if (engagements.length === 0) {
+      setError('Add at least one engagement')
+      return
+    }
     setLoading(true)
     setError('')
     try {
+      // Create client
       const { data: client, error: clientError } = await supabase
         .from('clients')
         .insert({
@@ -101,7 +140,7 @@ export default function AddClient() {
           email: form.email,
           phone: form.phone,
           pan: form.pan,
-          engagement_type: form.engagement_type,
+          engagement_type: engagements.map(e => e.type).join(', '),
           status: 'active'
         })
         .select()
@@ -109,17 +148,35 @@ export default function AddClient() {
 
       if (clientError) throw clientError
 
-      // Add document checklist
-      const dueDates: Record<string, string> = {}
-      const docs = selectedDocs.map(name => ({
-        client_id: client.id,
-        name,
-        status: 'pending',
-        due_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
-          .toISOString().split('T')[0]
-      }))
+      // Create each engagement and its documents
+      for (const eng of engagements) {
+        const { data: engData, error: engError } = await supabase
+          .from('engagements')
+          .insert({
+            client_id: client.id,
+            engagement_type: eng.type,
+            period: eng.period,
+            status: 'active'
+          })
+          .select()
+          .single()
 
-      await supabase.from('documents').insert(docs)
+        if (engError) throw engError
+
+        // Create documents for this engagement
+        const dueDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+          .toISOString().split('T')[0]
+
+        await supabase.from('documents').insert(
+          eng.docs.map(name => ({
+            client_id: client.id,
+            engagement_id: engData.id,
+            name,
+            status: 'pending',
+            due_date: dueDate
+          }))
+        )
+      }
 
       router.push('/ca/dashboard')
     } catch (e: any) {
@@ -146,6 +203,7 @@ export default function AddClient() {
           </div>
         )}
 
+        {/* Client details */}
         <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4 mb-4">
           <h2 className="text-sm font-medium text-gray-700">Client details</h2>
           <div className="grid grid-cols-2 gap-3">
@@ -185,52 +243,110 @@ export default function AddClient() {
                 onChange={e => setForm({ ...form, phone: e.target.value })} />
             </div>
           </div>
-          <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">Engagement type</label>
-            <select
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
-              value={form.engagement_type}
-              onChange={e => setForm({ ...form, engagement_type: e.target.value })}>
-              {Object.keys(engagementDocs).map(e => (
-                <option key={e}>{e}</option>
-              ))}
-            </select>
-          </div>
         </div>
 
+        {/* Engagements */}
         <div className="bg-white border border-gray-200 rounded-xl p-6 mb-4">
-          <h2 className="text-sm font-medium text-gray-700 mb-3">
-            Document checklist
-            <span className="text-xs text-gray-400 font-normal ml-2">
-              (auto-filled based on engagement — edit as needed)
-            </span>
-          </h2>
-          <div className="space-y-2">
-            {(engagementDocs[form.engagement_type] || []).map(doc => (
-              <div
-                key={doc}
-                onClick={() => toggleDoc(doc)}
-                className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer border transition-all
-                  ${selectedDocs.includes(doc)
-                    ? 'border-emerald-200 bg-emerald-50'
-                    : 'border-gray-100 bg-gray-50'}`}>
-                <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 text-xs
-                  ${selectedDocs.includes(doc)
-                    ? 'bg-emerald-600 text-white'
-                    : 'border border-gray-300'}`}>
-                  {selectedDocs.includes(doc) ? '✓' : ''}
-                </div>
-                <span className="text-sm text-gray-700">{doc}</span>
-              </div>
-            ))}
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-medium text-gray-700">
+              Engagements
+              <span className="ml-2 text-xs text-gray-400 font-normal">
+                (add one or more)
+              </span>
+            </h2>
+            <button
+              onClick={() => setShowEngagementPicker(true)}
+              className="text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700">
+              + Add engagement
+            </button>
           </div>
+
+          {/* Engagement picker */}
+          {showEngagementPicker && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+              <div className="mb-3">
+                <label className="text-xs font-medium text-gray-600 block mb-1">
+                  Engagement type
+                </label>
+                <select
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
+                  value={newEngType}
+                  onChange={e => setNewEngType(e.target.value)}>
+                  {Object.keys(engagementDocs).map(e => (
+                    <option key={e}>{e}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={addEngagement}
+                  className="text-xs bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700">
+                  Add
+                </button>
+                <button
+                  onClick={() => setShowEngagementPicker(false)}
+                  className="text-xs border border-gray-200 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-50">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {engagements.length === 0 ? (
+            <div className="text-center py-6 border border-dashed border-gray-200 rounded-lg">
+              <p className="text-gray-400 text-sm">No engagements added yet</p>
+              <p className="text-gray-400 text-xs mt-1">
+                Click "+ Add engagement" to add ITR, GST, Audit etc.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {engagements.map((eng, engIndex) => (
+                <div key={engIndex}
+                  className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">{eng.type}</p>
+                      <p className="text-xs text-gray-400">
+                        {eng.docs.length} documents
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => removeEngagement(engIndex)}
+                      className="text-xs text-red-500 hover:underline">
+                      Remove
+                    </button>
+                  </div>
+                  <div className="p-3 space-y-1">
+                    {(engagementDocs[eng.type] || []).map(doc => (
+                      <div
+                        key={doc}
+                        onClick={() => toggleDoc(engIndex, doc)}
+                        className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer
+                          ${eng.docs.includes(doc)
+                            ? 'bg-emerald-50 border border-emerald-200'
+                            : 'bg-white border border-gray-100'}`}>
+                        <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 text-xs
+                          ${eng.docs.includes(doc)
+                            ? 'bg-emerald-600 text-white'
+                            : 'border border-gray-300'}`}>
+                          {eng.docs.includes(doc) ? '✓' : ''}
+                        </div>
+                        <span className="text-xs text-gray-700">{doc}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <button
           onClick={handleAddClient}
           disabled={loading}
           className="w-full bg-emerald-600 text-white py-3 rounded-xl text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
-          {loading ? 'Adding client…' : '+ Add client & create checklist'}
+          {loading ? 'Adding client…' : '+ Add client & create checklists'}
         </button>
       </div>
     </main>
