@@ -81,7 +81,7 @@ export default function CADashboard() {
 <button
   onClick={async () => {
     const res = await fetch('/api/cron', {
-      headers: { 'Authorization': `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET}` }
+      headers: { 'Authorization': `Bearer caflow-cron-2026` }
     })
     const data = await res.json()
     alert(`Reminders sent: ${data.results?.length || 0} clients processed`)
