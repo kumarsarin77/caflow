@@ -78,6 +78,17 @@ export default function CADashboard() {
   <span className="text-sm font-medium text-emerald-600 tracking-wider">{firmCode}</span>
   <span className="text-xs text-gray-400 ml-2">📋</span>
 </div>
+<button
+  onClick={async () => {
+    const res = await fetch('/api/cron', {
+      headers: { 'Authorization': `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET}` }
+    })
+    const data = await res.json()
+    alert(`Reminders sent: ${data.results?.length || 0} clients processed`)
+  }}
+  className="text-sm text-amber-600 border border-amber-200 rounded-lg px-3 py-1.5 hover:bg-amber-50">
+  🔔 Send reminders
+</button>
           <button
             onClick={handleSignOut}
             className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5">
