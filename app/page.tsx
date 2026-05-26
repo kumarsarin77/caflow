@@ -21,12 +21,18 @@ export default function Home() {
             <p className="text-xs text-gray-500 mb-4">
               Register your firm and manage client documents
             </p>
-            <button
-              onClick={() => router.push('/ca/register')}
-              className="w-full bg-emerald-600 text-white text-sm py-2 rounded-lg hover:bg-emerald-700"
-            >
-              Register / Sign in
-            </button>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => router.push('/ca/register')}
+                className="w-full bg-emerald-600 text-white text-sm py-2 rounded-lg hover:bg-emerald-700">
+                Register
+              </button>
+              <button
+                onClick={() => router.push('/ca/login')}
+                className="w-full border border-emerald-600 text-emerald-600 text-sm py-2 rounded-lg hover:bg-emerald-50">
+                Login
+              </button>
+            </div>
           </div>
           <div className="bg-white border border-gray-200 rounded-xl p-6">
             <div className="text-3xl mb-3">👤</div>
@@ -34,12 +40,18 @@ export default function Home() {
             <p className="text-xs text-gray-500 mb-4">
               Join with your firm code and upload documents
             </p>
-            <button
-              onClick={() => router.push('/client/register')}
-              className="w-full border border-blue-600 text-blue-600 text-sm py-2 rounded-lg hover:bg-blue-50"
-            >
-              Register / Sign in
-            </button>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => router.push('/client/register')}
+                className="w-full bg-blue-600 text-white text-sm py-2 rounded-lg hover:bg-blue-700">
+                Register
+              </button>
+              <button
+                onClick={() => router.push('/client/login')}
+                className="w-full border border-blue-600 text-blue-600 text-sm py-2 rounded-lg hover:bg-blue-50">
+                Login
+              </button>
+            </div>
           </div>
         </div>
       </div>
