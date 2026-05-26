@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+console.log('Service key prefix:', process.env.SUPABASE_SERVICE_KEY?.slice(0, 20))
 
     const today = new Date()
     const results: any[] = []
