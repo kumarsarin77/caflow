@@ -86,8 +86,17 @@ export default function ClientPortal() {
 
       await loadPortal()
 
-      // Trigger AI extraction
+      // Create notification for CA
       const docName = documents.find(d => d.id === docId)?.name || 'document'
+      await supabase.from('notifications').insert({
+        firm_id: clientInfo.firm_id,
+        client_id: clientInfo.id,
+        type: 'document_uploaded',
+        message: `${clientInfo.full_name} uploaded "${docName}"`,
+        read: false
+      })
+
+      // Trigger AI extraction
       const extractRes = await fetch('/api/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -186,7 +195,6 @@ export default function ClientPortal() {
       </div>
 
       <div className="max-w-2xl mx-auto p-6">
-
         <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-medium text-gray-700">
@@ -379,18 +387,18 @@ export default function ClientPortal() {
               Please upload them immediately to avoid filing delays.
             </p>
           </div>
-       )}
+        )}
       </div>
 
       <ChatBot context="client" contextData={JSON.stringify({
-  name: clientInfo?.full_name,
-  engagement: clientInfo?.engagement_type,
-  documents: documents.map(d => ({
-    name: d.name,
-    status: d.status,
-    due_date: d.due_date
-  }))
-})} />
+        name: clientInfo?.full_name,
+        engagement: clientInfo?.engagement_type,
+        documents: documents.map(d => ({
+          name: d.name,
+          status: d.status,
+          due_date: d.due_date
+        }))
+      })} />
     </main>
   )
 }

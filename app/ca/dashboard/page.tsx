@@ -21,6 +21,8 @@ export default function CADashboard() {
   const [firmId, setFirmId] = useState('')
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('clients')
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [showNotifications, setShowNotifications] = useState(false)
 
   useEffect(() => {
     loadDashboard()
@@ -47,8 +49,27 @@ export default function CADashboard() {
         .eq('firm_id', firm.id)
 
       setClients(clientList || [])
+
+      const { data: notifData } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('firm_id', firm.id)
+        .eq('read', false)
+        .order('created_at', { ascending: false })
+
+      setNotifications(notifData || [])
     }
     setLoading(false)
+  }
+
+  async function markAllRead() {
+    await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('firm_id', firmId)
+      .eq('read', false)
+    setNotifications([])
+    setShowNotifications(false)
   }
 
   async function handleSignOut() {
@@ -80,6 +101,69 @@ export default function CADashboard() {
             <span className="text-sm font-medium text-emerald-600 tracking-wider">{firmCode}</span>
             <span className="text-xs text-gray-400 ml-2">📋</span>
           </div>
+
+          {/* Notification bell */}
+          <div className="relative">
+            <button
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="relative text-sm border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50">
+              🔔
+              {notifications.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                  {notifications.length}
+                </span>
+              )}
+            </button>
+            {showNotifications && (
+              <div className="absolute right-0 top-10 w-80 bg-white border border-gray-200 rounded-xl shadow-xl z-50">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                  <span className="text-sm font-medium text-gray-900">
+                    Notifications
+                    {notifications.length > 0 && (
+                      <span className="ml-2 text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full">
+                        {notifications.length} new
+                      </span>
+                    )}
+                  </span>
+                  {notifications.length > 0 && (
+                    <button
+                      onClick={markAllRead}
+                      className="text-xs text-emerald-600 hover:underline">
+                      Mark all read
+                    </button>
+                  )}
+                </div>
+                <div className="max-h-72 overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="p-6 text-center">
+                      <p className="text-gray-400 text-sm">No new notifications</p>
+                    </div>
+                  ) : (
+                    notifications.map(n => (
+                      <div key={n.id}
+                        className="flex items-start gap-3 px-4 py-3 border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
+                        onClick={() => router.push(`/ca/client/${n.client_id}`)}>
+                        <div className="w-8 h-8 bg-emerald-50 rounded-full flex items-center justify-center text-sm flex-shrink-0">
+                          📄
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-800">{n.message}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {new Date(n.created_at).toLocaleDateString('en-IN', {
+                              day: 'numeric', month: 'short'
+                            })} · {new Date(n.created_at).toLocaleTimeString('en-IN', {
+                              hour: '2-digit', minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           <button
             onClick={async () => {
               const res = await fetch('/api/cron', {
@@ -89,7 +173,7 @@ export default function CADashboard() {
               alert(`Reminders sent: ${data.results?.length || 0} clients processed`)
             }}
             className="text-sm text-amber-600 border border-amber-200 rounded-lg px-3 py-1.5 hover:bg-amber-50">
-            🔔 Send reminders
+            Send reminders
           </button>
           <button
             onClick={handleSignOut}
