@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import ChatBot from '@/components/ChatBot'
 
 type Client = {
   id: string
@@ -61,34 +62,33 @@ export default function CADashboard() {
 
   return (
     <main className="min-h-screen bg-gray-50">
-      {/* Navbar */}
       <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
         <h1 className="text-lg font-medium text-gray-900">
           CA<span className="text-emerald-600">Flow</span>
           <span className="text-sm font-normal text-gray-500 ml-2">{firmName}</span>
         </h1>
         <div className="flex items-center gap-3">
-          <div 
-  className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5 cursor-pointer hover:bg-emerald-100"
-  onClick={() => {
-    navigator.clipboard.writeText(firmCode)
-    alert('Firm code copied!')
-  }}>
-  <span className="text-xs text-gray-500">Firm code: </span>
-  <span className="text-sm font-medium text-emerald-600 tracking-wider">{firmCode}</span>
-  <span className="text-xs text-gray-400 ml-2">📋</span>
-</div>
-<button
-  onClick={async () => {
-    const res = await fetch('/api/cron', {
-      headers: { 'Authorization': `Bearer caflow-cron-2026` }
-    })
-    const data = await res.json()
-    alert(`Reminders sent: ${data.results?.length || 0} clients processed`)
-  }}
-  className="text-sm text-amber-600 border border-amber-200 rounded-lg px-3 py-1.5 hover:bg-amber-50">
-  🔔 Send reminders
-</button>
+          <div
+            className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5 cursor-pointer hover:bg-emerald-100"
+            onClick={() => {
+              navigator.clipboard.writeText(firmCode)
+              alert('Firm code copied!')
+            }}>
+            <span className="text-xs text-gray-500">Firm code: </span>
+            <span className="text-sm font-medium text-emerald-600 tracking-wider">{firmCode}</span>
+            <span className="text-xs text-gray-400 ml-2">📋</span>
+          </div>
+          <button
+            onClick={async () => {
+              const res = await fetch('/api/cron', {
+                headers: { 'Authorization': `Bearer caflow-cron-2026` }
+              })
+              const data = await res.json()
+              alert(`Reminders sent: ${data.results?.length || 0} clients processed`)
+            }}
+            className="text-sm text-amber-600 border border-amber-200 rounded-lg px-3 py-1.5 hover:bg-amber-50">
+            🔔 Send reminders
+          </button>
           <button
             onClick={handleSignOut}
             className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5">
@@ -98,7 +98,6 @@ export default function CADashboard() {
       </div>
 
       <div className="max-w-5xl mx-auto p-6">
-        {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="bg-white border border-gray-200 rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">Total clients</p>
@@ -116,7 +115,6 @@ export default function CADashboard() {
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-2 mb-4 border-b border-gray-200 pb-3">
           {['clients', 'documents', 'followups'].map(tab => (
             <button
@@ -131,7 +129,6 @@ export default function CADashboard() {
           ))}
         </div>
 
-        {/* Clients tab */}
         {activeTab === 'clients' && (
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -196,16 +193,18 @@ export default function CADashboard() {
 
         {activeTab === 'documents' && (
           <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
-            <p className="text-gray-400 text-sm">Document extraction view — coming in next phase</p>
+            <p className="text-gray-400 text-sm">Document extraction view — coming soon</p>
           </div>
         )}
 
         {activeTab === 'followups' && (
           <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
-            <p className="text-gray-400 text-sm">Follow-up queue — coming in next phase</p>
+            <p className="text-gray-400 text-sm">Follow-up queue — coming soon</p>
           </div>
         )}
       </div>
+
+      <ChatBot context="ca" contextData={JSON.stringify(clients)} />
     </main>
   )
 }

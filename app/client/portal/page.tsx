@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import ChatBot from '@/components/ChatBot'
 
 type Document = {
   id: string
@@ -378,8 +379,10 @@ export default function ClientPortal() {
               Please upload them immediately to avoid filing delays.
             </p>
           </div>
-        )}
+       )}
       </div>
+
+      <ChatBot context="client" />
     </main>
   )
 }
