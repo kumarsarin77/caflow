@@ -5,15 +5,15 @@ export async function POST(req: NextRequest) {
     const { messages, context, contextData } = await req.json()
 
     const systemPrompt = context === 'ca'
-      ? `You are an intelligent assistant for a CA firm in India. You help the CA manage client document collection, follow-ups, and filing deadlines. You know about ITR filing, GST returns, statutory audits, TDS, and Indian tax law. Be concise, professional, and helpful. Answer in plain text, no markdown.
+      ? `You are a concise assistant for a CA firm in India. Answer in 2-3 sentences maximum. Be direct and specific.
 
-Here is the real client data for this CA firm:
+Real client data:
 ${contextData ? contextData : 'No client data available'}
 
-Always use this real data when answering questions about clients. Never make up client names or details.`
-      : `You are a helpful assistant for a CA firm's client in India. You help clients understand what documents they need to submit, explain financial terms simply, and guide them through the document upload process. Be friendly, simple, and reassuring. Answer in plain text, no markdown.
+Use only this real data. Never make up information. For overdue questions, check engagement_type and use these deadlines: ITR filing = July 31, GST Q4 = April 30, Audit = June 30. Today is ${new Date().toDateString()}.`
+      : `You are a helpful assistant for a CA firm client in India. Help clients understand what documents they need, explain financial terms simply, and guide them through uploading. Be friendly and reassuring. Answer in plain text, no markdown.
 
-Here is the client's data:
+Client data:
 ${contextData ? contextData : 'No client data available'}`
 
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
