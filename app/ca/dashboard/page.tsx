@@ -18,6 +18,7 @@ export default function CADashboard() {
   const [clients, setClients] = useState<Client[]>([])
   const [firmName, setFirmName] = useState('')
   const [firmCode, setFirmCode] = useState('')
+  const [firmId, setFirmId] = useState('')
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('clients')
 
@@ -38,6 +39,7 @@ export default function CADashboard() {
     if (firm) {
       setFirmName(firm.firm_name)
       setFirmCode(firm.firm_code)
+      setFirmId(firm.id)
 
       const { data: clientList } = await supabase
         .from('clients')
@@ -124,7 +126,7 @@ export default function CADashboard() {
                 ${activeTab === tab
                   ? 'bg-emerald-600 text-white'
                   : 'text-gray-500 hover:text-gray-700'}`}>
-              {tab}
+              {tab === 'followups' ? '🔔 Reminders' : tab}
             </button>
           ))}
         </div>
@@ -198,13 +200,109 @@ export default function CADashboard() {
         )}
 
         {activeTab === 'followups' && (
-          <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
-            <p className="text-gray-400 text-sm">Follow-up queue — coming soon</p>
-          </div>
+          <FollowupHistory firmId={firmId} clients={clients} />
         )}
       </div>
 
       <ChatBot context="ca" contextData={JSON.stringify(clients)} />
     </main>
+  )
+}
+
+function FollowupHistory({ firmId, clients }: { firmId: string, clients: Client[] }) {
+  const [followups, setFollowups] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadFollowups()
+  }, [firmId, clients])
+
+  async function loadFollowups() {
+    if (!firmId || clients.length === 0) { setLoading(false); return }
+    const clientIds = clients.map(c => c.id)
+
+    const { data } = await supabase
+      .from('followups')
+      .select('*')
+      .in('client_id', clientIds)
+      .order('sent_at', { ascending: false })
+      .limit(50)
+
+    setFollowups(data || [])
+    setLoading(false)
+  }
+
+  function getClientName(clientId: string) {
+    return clients.find(c => c.id === clientId)?.full_name || 'Unknown client'
+  }
+
+  function getEscalationLabel(step: number) {
+    if (step === 1) return { label: 'Reminder 1', color: 'bg-blue-50 text-blue-700' }
+    if (step === 2) return { label: 'Reminder 2', color: 'bg-amber-50 text-amber-700' }
+    if (step === 3) return { label: 'Reminder 3', color: 'bg-orange-50 text-orange-700' }
+    return { label: 'Escalated', color: 'bg-red-50 text-red-700' }
+  }
+
+  if (loading) return (
+    <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
+      <p className="text-gray-400 text-sm">Loading reminder history…</p>
+    </div>
+  )
+
+  if (followups.length === 0) return (
+    <div className="bg-white border border-dashed border-gray-300 rounded-xl p-12 text-center">
+      <p className="text-2xl mb-3">🔔</p>
+      <p className="text-gray-400 text-sm">No reminders sent yet</p>
+      <p className="text-gray-400 text-xs mt-1">
+        Click "Send reminders" or wait for the daily auto-reminder at 9 AM
+      </p>
+    </div>
+  )
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-sm font-medium text-gray-700">
+          Reminder history
+          <span className="ml-2 text-xs text-gray-400 font-normal">
+            {followups.length} total sent
+          </span>
+        </h2>
+      </div>
+      {followups.map(fu => {
+        const esc = getEscalationLabel(fu.escalation_step)
+        const date = new Date(fu.sent_at)
+        const dateStr = date.toLocaleDateString('en-IN', {
+          day: 'numeric', month: 'short', year: 'numeric'
+        })
+        const timeStr = date.toLocaleTimeString('en-IN', {
+          hour: '2-digit', minute: '2-digit'
+        })
+        return (
+          <div key={fu.id}
+            className="bg-white border border-gray-200 rounded-xl p-4">
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium text-gray-900">
+                  {getClientName(fu.client_id)}
+                </span>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${esc.color}`}>
+                  {esc.label}
+                </span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                  {fu.channel === 'whatsapp' ? '📱 WhatsApp' : '📧 Email'}
+                </span>
+              </div>
+              <span className="text-xs text-gray-400 flex-shrink-0">
+                {dateStr} · {timeStr}
+              </span>
+            </div>
+            <p className="text-xs text-gray-600 bg-gray-50 rounded-lg p-3 leading-relaxed">
+              {fu.message}
+            </p>
+          </div>
+        )
+      })}
+    </div>
   )
 }
