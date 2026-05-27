@@ -382,7 +382,15 @@ export default function ClientPortal() {
        )}
       </div>
 
-      <ChatBot context="client" />
+      <ChatBot context="client" contextData={JSON.stringify({
+  name: clientInfo?.full_name,
+  engagement: clientInfo?.engagement_type,
+  documents: documents.map(d => ({
+    name: d.name,
+    status: d.status,
+    due_date: d.due_date
+  }))
+})} />
     </main>
   )
 }
