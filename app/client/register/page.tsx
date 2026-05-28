@@ -48,38 +48,48 @@ export default function ClientRegister() {
       })
 
       const { data: newClient } = await supabase.from('clients').insert({
-  firm_id: firm.id,
-  user_id: userId,
-  full_name: form.full_name,
-  email: form.email,
-  phone: form.phone,
-  pan: form.pan,
-  engagement_type: 'ITR filing — AY 2025-26',
-  status: 'active'
-}).select().single()
+        firm_id: firm.id,
+        user_id: userId,
+        full_name: form.full_name,
+        email: form.email,
+        phone: form.phone,
+        pan: form.pan,
+        engagement_type: 'ITR filing — AY 2025-26',
+        status: 'active'
+      }).select().single()
 
-if (newClient) {
-  const defaultDocs = [
-    'Form 16 (salary)',
-    'Bank interest certificate',
-    'Home loan statement',
-    'Capital gains statement',
-    '80C investment proofs',
-    'Rent receipts',
-    'Aadhar & PAN copy'
-  ]
-  const dueDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
-    .toISOString().split('T')[0]
+      if (newClient) {
+        const defaultDocs = [
+          'Form 16 (salary)',
+          'Bank interest certificate',
+          'Home loan statement',
+          'Capital gains statement',
+          '80C investment proofs',
+          'Rent receipts',
+          'Aadhar & PAN copy'
+        ]
+        const dueDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+          .toISOString().split('T')[0]
 
-  await supabase.from('documents').insert(
-    defaultDocs.map(name => ({
-      client_id: newClient.id,
-      name,
-      status: 'pending',
-      due_date: dueDate
-    }))
-  )
-}
+        await supabase.from('documents').insert(
+          defaultDocs.map(name => ({
+            client_id: newClient.id,
+            name,
+            status: 'pending',
+            due_date: dueDate
+          }))
+        )
+      }
+
+      await fetch('/api/send-welcome-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: form.email,
+          full_name: form.full_name,
+          firm_name: firm.firm_name,
+        })
+      })
 
       setStep(3)
       setTimeout(() => router.push('/client/portal'), 1500)
