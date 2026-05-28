@@ -170,7 +170,7 @@ export default function CADashboard() {
                 headers: { 'Authorization': `Bearer caflow-cron-2026` }
               })
               const data = await res.json()
-              alert(JSON.stringify(data.results, null, 2))
+              alert(`Reminders sent: ${data.results?.length || 0} clients processed`)
             }}
             className="text-sm text-amber-600 border border-amber-200 rounded-lg px-3 py-1.5 hover:bg-amber-50">
             Send reminders
