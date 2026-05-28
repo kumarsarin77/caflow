@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-   "dev": "node --max-old-space-size=512 node_modules/next/dist/bin/next dev",
+    "dev": "node --max-old-space-size=512 node_modules/next/dist/bin/next dev",
     "build": "next build",
     "start": "next start"
   },
@@ -12,7 +12,8 @@
     "@supabase/supabase-js": "^2.106.0",
     "next": "16.2.6",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "resend": "^6.12.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

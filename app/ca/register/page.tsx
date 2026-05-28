@@ -67,6 +67,17 @@ export default function CARegister() {
         services: services,
       })
 
+      await fetch('/api/send-welcome-ca', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: form.email,
+          ca_name: form.ca_name,
+          firm_name: form.firm_name,
+          firm_code: code,
+        })
+      })
+
       setStep(3)
     } catch (e: any) {
       setError(e.message)
@@ -87,7 +98,6 @@ export default function CARegister() {
           <h1 className="text-lg font-medium text-gray-900">Register CA firm</h1>
         </div>
 
-        {/* Step indicators */}
         <div className="flex items-center gap-2 mb-6 text-xs">
           {['Firm details', 'Services', 'Done'].map((s, i) => (
             <div key={s} className="flex items-center gap-2">
@@ -111,7 +121,6 @@ export default function CARegister() {
           </div>
         )}
 
-        {/* Step 1 - Firm details */}
         {step === 1 && (
           <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
             <div className="grid grid-cols-2 gap-3">
@@ -186,7 +195,6 @@ export default function CARegister() {
           </div>
         )}
 
-        {/* Step 2 - Services */}
         {step === 2 && (
           <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
             <div>
@@ -221,7 +229,6 @@ export default function CARegister() {
           </div>
         )}
 
-        {/* Step 3 - Done */}
         {step === 3 && (
           <div className="bg-white border border-gray-200 rounded-xl p-6 text-center space-y-4">
             <div className="text-4xl">🎉</div>
