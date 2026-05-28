@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
+import twilio from 'twilio'
 
 const resend = new Resend(process.env.RESEND_API_KEY ?? '')
+const twilioClient = twilio(
+  process.env.TWILIO_ACCOUNT_SID!,
+  process.env.TWILIO_AUTH_TOKEN!
+)
 
 export async function GET(req: NextRequest) {
   try {
@@ -23,20 +28,16 @@ export async function GET(req: NextRequest) {
       .from('clients')
       .select('*')
 
-    console.log('Clients found:', clients?.length, clientsError)
-
     if (!clients || clients.length === 0) {
       return NextResponse.json({ message: 'No clients found', results: [] })
     }
 
     for (const client of clients) {
-      const { data: docs, error: docsError } = await supabase
+      const { data: docs } = await supabase
         .from('documents')
         .select('*')
         .eq('client_id', client.id)
         .in('status', ['pending', 'overdue'])
-
-      console.log(`Client ${client.full_name}: ${docs?.length} pending docs`, docsError)
 
       if (!docs || docs.length === 0) continue
 
@@ -76,7 +77,9 @@ export async function GET(req: NextRequest) {
       }
 
       const pendingList = docs.map((d: any) => `• ${d.name}`).join('\n')
-      const prompt = `You are a CA firm assistant. Write a ${tone} email reminder (reminder ${escalationStep}) to client "${client.full_name}" for their ${client.engagement_type} filing.\n\nPending documents:\n${pendingList}\n\nUnder 120 words. Address by first name. Sign off as "CA Team". No markdown or asterisks.`
+
+      // Generate WhatsApp message
+      const waPrompt = `You are a CA firm assistant. Write a ${tone} WhatsApp reminder (reminder ${escalationStep}) to client "${client.full_name}" for their ${client.engagement_type} filing.\n\nPending documents:\n${pendingList}\n\nUnder 100 words. Address by first name. Sign off as "CA Team". No markdown or asterisks.`
 
       const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
@@ -86,49 +89,85 @@ export async function GET(req: NextRequest) {
         },
         body: JSON.stringify({
           model: 'llama-3.3-70b-versatile',
-          messages: [{ role: 'user', content: prompt }],
+          messages: [{ role: 'user', content: waPrompt }],
           max_tokens: 300
         })
       })
 
       const groqData = await groqRes.json()
-      const message = groqData.choices?.[0]?.message?.content || 'Reminder: Please submit your pending documents.'
+      const waMessage = groqData.choices?.[0]?.message?.content || 'Reminder: Please submit your pending documents.'
 
-      // Send real email via Resend
+      // Send WhatsApp via Twilio
+      if (client.phone) {
+        try {
+          await twilioClient.messages.create({
+            from: process.env.TWILIO_WHATSAPP_NUMBER!,
+            to: `whatsapp:${client.phone}`,
+            body: waMessage
+          })
+        } catch (waError: any) {
+          console.error(`WhatsApp failed for ${client.full_name}:`, waError.message)
+        }
+      }
+
+      // Generate email message
+      const emailPrompt = `You are a CA firm assistant. Write a ${tone} email reminder (reminder ${escalationStep}) to client "${client.full_name}" for their ${client.engagement_type} filing.\n\nPending documents:\n${pendingList}\n\nUnder 120 words. Address by first name. Sign off as "CA Team". No markdown.`
+
+      const emailGroqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'user', content: emailPrompt }],
+          max_tokens: 300
+        })
+      })
+
+      const emailGroqData = await emailGroqRes.json()
+      const emailMessage = emailGroqData.choices?.[0]?.message?.content || 'Reminder: Please submit your pending documents.'
+
+      // Send email via Resend
       if (client.email) {
         const subjectByStep: Record<number, string> = {
           1: `Reminder: Documents pending for ${client.engagement_type}`,
           2: `Action needed: Overdue documents for ${client.engagement_type}`,
           3: `Urgent: Final reminder for ${client.engagement_type}`,
         }
-        await resend.emails.send({
-          from: 'CAFlow <onboarding@resend.dev>',
-          to: client.email,
-          subject: subjectByStep[escalationStep] || 'Document reminder from your CA',
-          html: `
-            <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;">
-              <h2 style="color: #059669;">CAFlow — Document Reminder</h2>
-              <p style="color: #374151; white-space: pre-line;">${message}</p>
-              <div style="background: #f0fdf4; border: 1px solid #6ee7b7; border-radius: 12px; padding: 20px; margin: 24px 0;">
-                <p style="color: #374151; font-weight: bold; margin: 0 0 8px;">Pending documents:</p>
-                <ul style="color: #374151; margin: 0; padding-left: 20px;">
-                  ${docs.map((d: any) => `<li>${d.name}</li>`).join('')}
-                </ul>
+        try {
+          await resend.emails.send({
+            from: 'CAFlow <onboarding@resend.dev>',
+            to: client.email,
+            subject: subjectByStep[escalationStep] || 'Document reminder from your CA',
+            html: `
+              <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;">
+                <h2 style="color: #059669;">CAFlow — Document Reminder</h2>
+                <p style="color: #374151; white-space: pre-line;">${emailMessage}</p>
+                <div style="background: #f0fdf4; border: 1px solid #6ee7b7; border-radius: 12px; padding: 20px; margin: 24px 0;">
+                  <p style="color: #374151; font-weight: bold; margin: 0 0 8px;">Pending documents:</p>
+                  <ul style="color: #374151; margin: 0; padding-left: 20px;">
+                    ${docs.map((d: any) => `<li>${d.name}</li>`).join('')}
+                  </ul>
+                </div>
+                <a href="https://caflow-delta.vercel.app/client/login"
+                  style="display: inline-block; background: #059669; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">
+                  Upload Documents →
+                </a>
+                <p style="color: #9ca3af; font-size: 12px; margin-top: 32px;">CAFlow — Built for Indian CA firms</p>
               </div>
-              <a href="https://caflow-delta.vercel.app/client/login"
-                style="display: inline-block; background: #059669; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">
-                Upload Documents →
-              </a>
-              <p style="color: #9ca3af; font-size: 12px; margin-top: 32px;">CAFlow — Built for Indian CA firms</p>
-            </div>
-          `
-        })
+            `
+          })
+        } catch (emailError: any) {
+          console.error(`Email failed for ${client.full_name}:`, emailError.message)
+        }
       }
 
       await supabase.from('followups').insert({
         client_id: client.id,
-        channel: 'email',
-        message,
+        channel: 'whatsapp+email',
+        message: waMessage,
         escalation_step: escalationStep,
         sent_at: new Date().toISOString()
       })
@@ -145,11 +184,12 @@ export async function GET(req: NextRequest) {
 
       results.push({
         client: client.full_name,
+        phone: client.phone,
         email: client.email,
         status: 'reminder sent ✓',
         step: escalationStep,
         daysOverdue: maxDaysOverdue,
-        message: message.slice(0, 80) + '...'
+        message: waMessage.slice(0, 80) + '...'
       })
     }
 
