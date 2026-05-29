@@ -11,7 +11,7 @@ export default function CARegister() {
   const [firmCode, setFirmCode] = useState('')
   const [form, setForm] = useState({
     email: '', password: '', ca_name: '', firm_name: '',
-    icai_no: '', city: '', phone: ''
+    icai_no: '', city: '', phone: '', address: '', gst_no: ''
   })
   const [services, setServices] = useState<string[]>([])
 
@@ -63,6 +63,8 @@ export default function CARegister() {
         ca_name: form.ca_name,
         city: form.city,
         phone: form.phone,
+        address: form.address,
+        gst_no: form.gst_no,
         firm_code: code,
         services: services,
       })
@@ -159,6 +161,15 @@ export default function CARegister() {
                   onChange={e => setForm({ ...form, city: e.target.value })} />
               </div>
             </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">Firm address</label>
+              <textarea
+                rows={2}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 resize-none"
+                placeholder="Full office address"
+                value={form.address}
+                onChange={e => setForm({ ...form, address: e.target.value })} />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Email</label>
@@ -177,6 +188,16 @@ export default function CARegister() {
                   value={form.phone}
                   onChange={e => setForm({ ...form, phone: e.target.value })} />
               </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">
+                GST number <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <input
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
+                placeholder="22AAAAA0000A1Z5"
+                value={form.gst_no}
+                onChange={e => setForm({ ...form, gst_no: e.target.value })} />
             </div>
             <div>
               <label className="text-xs font-medium text-gray-600 block mb-1">Password</label>
