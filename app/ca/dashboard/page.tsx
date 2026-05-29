@@ -20,10 +20,19 @@ type Document = {
   status: string
 }
 
+type Invoice = {
+  id: string
+  client_id: string
+  invoice_number: string
+  total_amount: number
+  status: string
+}
+
 export default function CADashboard() {
   const router = useRouter()
   const [clients, setClients] = useState<Client[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
+  const [invoices, setInvoices] = useState<Invoice[]>([])
   const [firmName, setFirmName] = useState('')
   const [firmCode, setFirmCode] = useState('')
   const [firmId, setFirmId] = useState('')
@@ -60,6 +69,10 @@ export default function CADashboard() {
         setDocuments(docList || [])
       }
 
+      const { data: invoiceList } = await supabase
+        .from('invoices').select('*').eq('firm_id', firm.id)
+      setInvoices(invoiceList || [])
+
       const { data: notifData } = await supabase
         .from('notifications').select('*')
         .eq('firm_id', firm.id).eq('read', false)
@@ -85,6 +98,14 @@ export default function CADashboard() {
   const uploadedDocs = documents.filter(d => d.status === 'uploaded' || d.status === 'verified').length
   const pendingDocs = documents.filter(d => d.status === 'pending').length
   const overdueDocs = documents.filter(d => d.status === 'overdue').length
+
+  const totalInvoices = invoices.length
+  const sentInvoices = invoices.filter(i => i.status === 'sent').length
+  const paidInvoices = invoices.filter(i => i.status === 'paid').length
+  const pendingInvoices = invoices.filter(i => i.status === 'draft' || i.status === 'sent').length
+  const totalBilled = invoices.reduce((sum, i) => sum + (i.total_amount || 0), 0)
+  const totalReceived = invoices.filter(i => i.status === 'paid').reduce((sum, i) => sum + (i.total_amount || 0), 0)
+  const totalPending = invoices.filter(i => i.status !== 'paid').reduce((sum, i) => sum + (i.total_amount || 0), 0)
 
   const clientDocStats = clients.map(client => {
     const clientDocs = documents.filter(d => d.client_id === client.id)
@@ -204,13 +225,16 @@ export default function CADashboard() {
               {tab.label}
             </button>
           ))}
+          <button
+            onClick={() => router.push('/ca/invoices')}
+            className="px-4 py-1.5 rounded-lg text-sm text-blue-600 border border-blue-200 hover:bg-blue-50 ml-auto">
+            🧾 Invoices
+          </button>
         </div>
 
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (
           <div className="space-y-4">
-
-            {/* Top stats */}
             <div className="grid grid-cols-4 gap-4">
               <div className="bg-white border border-gray-200 rounded-xl p-4">
                 <p className="text-xs text-gray-500 mb-1">Total clients</p>
@@ -222,15 +246,16 @@ export default function CADashboard() {
                 <p className="text-3xl font-semibold text-emerald-600">{uploadedDocs}</p>
                 <p className="text-xs text-gray-400 mt-1">of {totalDocs} total</p>
               </div>
-              <div className="bg-white border border-gray-200 rounded-xl p-4">
+              <div className="bg-white border border-gray-200 rounded-xl p-4 cursor-pointer hover:bg-blue-50"
+                onClick={() => router.push('/ca/invoices')}>
                 <p className="text-xs text-gray-500 mb-1">Invoices generated</p>
-                <p className="text-3xl font-semibold text-blue-500">0</p>
-                <p className="text-xs text-gray-400 mt-1">Coming soon</p>
+                <p className="text-3xl font-semibold text-blue-500">{totalInvoices}</p>
+                <p className="text-xs text-gray-400 mt-1">{paidInvoices} paid · {sentInvoices} sent</p>
               </div>
               <div className="bg-white border border-gray-200 rounded-xl p-4">
                 <p className="text-xs text-gray-500 mb-1">Payments received</p>
-                <p className="text-3xl font-semibold text-violet-500">₹0</p>
-                <p className="text-xs text-gray-400 mt-1">Coming soon</p>
+                <p className="text-3xl font-semibold text-violet-500">₹{totalReceived.toLocaleString('en-IN')}</p>
+                <p className="text-xs text-gray-400 mt-1">₹{totalPending.toLocaleString('en-IN')} pending</p>
               </div>
             </div>
 
@@ -286,40 +311,41 @@ export default function CADashboard() {
             </div>
 
             {/* INVOICES SECTION */}
-            <div className="bg-white border border-dashed border-blue-200 rounded-xl overflow-hidden">
+            <div className="bg-white border border-blue-100 rounded-xl overflow-hidden">
               <button
                 onClick={() => setInvoicesExpanded(!invoicesExpanded)}
                 className="w-full flex items-center justify-between px-5 py-4 hover:bg-blue-50 transition-colors">
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-medium text-gray-700">🧾 Invoices</span>
-                  <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">Coming soon</span>
                   <div className="flex gap-2 text-xs">
-                    <span className="bg-gray-50 text-gray-600 px-2 py-0.5 rounded-full">0 generated</span>
-                    <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">0 sent</span>
-                    <span className="bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full">0 pending</span>
+                    <span className="bg-gray-50 text-gray-600 px-2 py-0.5 rounded-full">{totalInvoices} total</span>
+                    <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">{sentInvoices} sent</span>
+                    <span className="bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">{paidInvoices} paid</span>
                   </div>
                 </div>
                 <span className="text-xs text-gray-400">{invoicesExpanded ? '▲' : '▼'}</span>
               </button>
               {invoicesExpanded && (
                 <div className="border-t border-blue-100 px-5 py-4">
-                  <div className="grid grid-cols-3 gap-4 text-center">
+                  <div className="grid grid-cols-3 gap-4 text-center mb-4">
                     <div className="bg-gray-50 rounded-xl p-4">
-                      <p className="text-2xl font-semibold text-gray-900">0</p>
+                      <p className="text-2xl font-semibold text-gray-900">{totalInvoices}</p>
                       <p className="text-xs text-gray-400 mt-1">Generated</p>
                     </div>
                     <div className="bg-blue-50 rounded-xl p-4">
-                      <p className="text-2xl font-semibold text-blue-500">0</p>
+                      <p className="text-2xl font-semibold text-blue-500">{sentInvoices}</p>
                       <p className="text-xs text-gray-400 mt-1">Sent to clients</p>
                     </div>
-                    <div className="bg-amber-50 rounded-xl p-4">
-                      <p className="text-2xl font-semibold text-amber-500">0</p>
-                      <p className="text-xs text-gray-400 mt-1">Payment pending</p>
+                    <div className="bg-emerald-50 rounded-xl p-4">
+                      <p className="text-2xl font-semibold text-emerald-600">₹{totalReceived.toLocaleString('en-IN')}</p>
+                      <p className="text-xs text-gray-400 mt-1">Received</p>
                     </div>
                   </div>
-                  <p className="text-xs text-gray-400 text-center mt-4">
-                    Invoice generation & tracking coming soon
-                  </p>
+                  <button
+                    onClick={() => router.push('/ca/invoices')}
+                    className="w-full border border-blue-200 text-blue-600 text-sm py-2 rounded-lg hover:bg-blue-50">
+                    Manage invoices →
+                  </button>
                 </div>
               )}
             </div>
@@ -333,8 +359,8 @@ export default function CADashboard() {
                   <span className="text-sm font-medium text-gray-700">💰 Payments</span>
                   <span className="text-xs bg-violet-50 text-violet-600 px-2 py-0.5 rounded-full">Coming soon</span>
                   <div className="flex gap-2 text-xs">
-                    <span className="bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">₹0 received</span>
-                    <span className="bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full">₹0 pending</span>
+                    <span className="bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">₹{totalReceived.toLocaleString('en-IN')} received</span>
+                    <span className="bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full">₹{totalPending.toLocaleString('en-IN')} pending</span>
                   </div>
                 </div>
                 <span className="text-xs text-gray-400">{paymentsExpanded ? '▲' : '▼'}</span>
@@ -343,11 +369,11 @@ export default function CADashboard() {
                 <div className="border-t border-violet-100 px-5 py-4">
                   <div className="grid grid-cols-3 gap-4 text-center">
                     <div className="bg-emerald-50 rounded-xl p-4">
-                      <p className="text-2xl font-semibold text-emerald-600">₹0</p>
+                      <p className="text-2xl font-semibold text-emerald-600">₹{totalReceived.toLocaleString('en-IN')}</p>
                       <p className="text-xs text-gray-400 mt-1">Received</p>
                     </div>
                     <div className="bg-amber-50 rounded-xl p-4">
-                      <p className="text-2xl font-semibold text-amber-500">₹0</p>
+                      <p className="text-2xl font-semibold text-amber-500">₹{totalPending.toLocaleString('en-IN')}</p>
                       <p className="text-xs text-gray-400 mt-1">Pending</p>
                     </div>
                     <div className="bg-red-50 rounded-xl p-4">
@@ -361,7 +387,6 @@ export default function CADashboard() {
                 </div>
               )}
             </div>
-
           </div>
         )}
 
