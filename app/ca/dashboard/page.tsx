@@ -13,30 +13,33 @@ type Client = {
   status: string
 }
 
+type Document = {
+  id: string
+  client_id: string
+  name: string
+  status: string
+}
+
 export default function CADashboard() {
   const router = useRouter()
   const [clients, setClients] = useState<Client[]>([])
+  const [documents, setDocuments] = useState<Document[]>([])
   const [firmName, setFirmName] = useState('')
   const [firmCode, setFirmCode] = useState('')
   const [firmId, setFirmId] = useState('')
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('clients')
+  const [activeTab, setActiveTab] = useState('overview')
   const [notifications, setNotifications] = useState<any[]>([])
   const [showNotifications, setShowNotifications] = useState(false)
 
-  useEffect(() => {
-    loadDashboard()
-  }, [])
+  useEffect(() => { loadDashboard() }, [])
 
   async function loadDashboard() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/ca/login'); return }
 
     const { data: firm } = await supabase
-      .from('firms')
-      .select('*')
-      .eq('user_id', user.id)
-      .single()
+      .from('firms').select('*').eq('user_id', user.id).single()
 
     if (firm) {
       setFirmName(firm.firm_name)
@@ -44,30 +47,28 @@ export default function CADashboard() {
       setFirmId(firm.id)
 
       const { data: clientList } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('firm_id', firm.id)
-
+        .from('clients').select('*').eq('firm_id', firm.id)
       setClients(clientList || [])
 
-      const { data: notifData } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('firm_id', firm.id)
-        .eq('read', false)
-        .order('created_at', { ascending: false })
+      if (clientList && clientList.length > 0) {
+        const clientIds = clientList.map((c: Client) => c.id)
+        const { data: docList } = await supabase
+          .from('documents').select('*').in('client_id', clientIds)
+        setDocuments(docList || [])
+      }
 
+      const { data: notifData } = await supabase
+        .from('notifications').select('*')
+        .eq('firm_id', firm.id).eq('read', false)
+        .order('created_at', { ascending: false })
       setNotifications(notifData || [])
     }
     setLoading(false)
   }
 
   async function markAllRead() {
-    await supabase
-      .from('notifications')
-      .update({ read: true })
-      .eq('firm_id', firmId)
-      .eq('read', false)
+    await supabase.from('notifications').update({ read: true })
+      .eq('firm_id', firmId).eq('read', false)
     setNotifications([])
     setShowNotifications(false)
   }
@@ -77,6 +78,20 @@ export default function CADashboard() {
     router.push('/')
   }
 
+  // Document stats
+  const totalDocs = documents.length
+  const uploadedDocs = documents.filter(d => d.status === 'uploaded' || d.status === 'verified').length
+  const pendingDocs = documents.filter(d => d.status === 'pending').length
+  const overdueDocs = documents.filter(d => d.status === 'overdue').length
+
+  // Per client document stats
+  const clientDocStats = clients.map(client => {
+    const clientDocs = documents.filter(d => d.client_id === client.id)
+    const uploaded = clientDocs.filter(d => d.status === 'uploaded' || d.status === 'verified').length
+    const pending = clientDocs.filter(d => d.status === 'pending' || d.status === 'overdue').length
+    return { ...client, totalDocs: clientDocs.length, uploaded, pending }
+  })
+
   if (loading) return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center">
       <p className="text-gray-500 text-sm">Loading dashboard…</p>
@@ -85,6 +100,7 @@ export default function CADashboard() {
 
   return (
     <main className="min-h-screen bg-gray-50">
+      {/* NAV */}
       <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
         <h1 className="text-lg font-medium text-gray-900">
           CA<span className="text-emerald-600">Flow</span>
@@ -93,16 +109,12 @@ export default function CADashboard() {
         <div className="flex items-center gap-3">
           <div
             className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5 cursor-pointer hover:bg-emerald-100"
-            onClick={() => {
-              navigator.clipboard.writeText(firmCode)
-              alert('Firm code copied!')
-            }}>
+            onClick={() => { navigator.clipboard.writeText(firmCode); alert('Firm code copied!') }}>
             <span className="text-xs text-gray-500">Firm code: </span>
             <span className="text-sm font-medium text-emerald-600 tracking-wider">{firmCode}</span>
             <span className="text-xs text-gray-400 ml-2">📋</span>
           </div>
 
-          {/* Notification bell */}
           <div className="relative">
             <button
               onClick={() => setShowNotifications(!showNotifications)}
@@ -126,9 +138,7 @@ export default function CADashboard() {
                     )}
                   </span>
                   {notifications.length > 0 && (
-                    <button
-                      onClick={markAllRead}
-                      className="text-xs text-emerald-600 hover:underline">
+                    <button onClick={markAllRead} className="text-xs text-emerald-600 hover:underline">
                       Mark all read
                     </button>
                   )}
@@ -143,17 +153,12 @@ export default function CADashboard() {
                       <div key={n.id}
                         className="flex items-start gap-3 px-4 py-3 border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
                         onClick={() => router.push(`/ca/client/${n.client_id}`)}>
-                        <div className="w-8 h-8 bg-emerald-50 rounded-full flex items-center justify-center text-sm flex-shrink-0">
-                          📄
-                        </div>
+                        <div className="w-8 h-8 bg-emerald-50 rounded-full flex items-center justify-center text-sm flex-shrink-0">📄</div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm text-gray-800">{n.message}</p>
                           <p className="text-xs text-gray-400 mt-0.5">
-                            {new Date(n.created_at).toLocaleDateString('en-IN', {
-                              day: 'numeric', month: 'short'
-                            })} · {new Date(n.created_at).toLocaleTimeString('en-IN', {
-                              hour: '2-digit', minute: '2-digit'
-                            })}
+                            {new Date(n.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                            · {new Date(n.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                           </p>
                         </div>
                       </div>
@@ -166,9 +171,7 @@ export default function CADashboard() {
 
           <button
             onClick={async () => {
-              const res = await fetch('/api/cron', {
-                headers: { 'Authorization': `Bearer caflow-cron-2026` }
-              })
+              const res = await fetch('/api/cron', { headers: { 'Authorization': `Bearer caflow-cron-2026` } })
               const data = await res.json()
               alert(`Reminders sent: ${data.results?.length || 0} clients processed`)
             }}
@@ -183,38 +186,152 @@ export default function CADashboard() {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto p-6">
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <p className="text-xs text-gray-500 mb-1">Total clients</p>
-            <p className="text-2xl font-medium text-gray-900">{clients.length}</p>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <p className="text-xs text-gray-500 mb-1">Active engagements</p>
-            <p className="text-2xl font-medium text-emerald-600">
-              {clients.filter(c => c.status === 'active').length}
-            </p>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <p className="text-xs text-gray-500 mb-1">Firm code</p>
-            <p className="text-2xl font-medium text-gray-900">{firmCode}</p>
-          </div>
-        </div>
+      <div className="max-w-6xl mx-auto p-6">
 
-        <div className="flex gap-2 mb-4 border-b border-gray-200 pb-3">
-          {['clients', 'documents', 'followups'].map(tab => (
+        {/* TABS */}
+        <div className="flex gap-2 mb-6 border-b border-gray-200 pb-3">
+          {[
+            { key: 'overview', label: '📊 Overview' },
+            { key: 'clients', label: '👥 Clients' },
+            { key: 'documents', label: '📋 Documents' },
+            { key: 'followups', label: '🔔 Reminders' },
+          ].map(tab => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-1.5 rounded-lg text-sm capitalize
-                ${activeTab === tab
-                  ? 'bg-emerald-600 text-white'
-                  : 'text-gray-500 hover:text-gray-700'}`}>
-              {tab === 'followups' ? '🔔 Reminders' : tab}
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-4 py-1.5 rounded-lg text-sm
+                ${activeTab === tab.key ? 'bg-emerald-600 text-white' : 'text-gray-500 hover:text-gray-700'}`}>
+              {tab.label}
             </button>
           ))}
         </div>
 
+        {/* OVERVIEW TAB */}
+        {activeTab === 'overview' && (
+          <div className="space-y-6">
+
+            {/* Top stats */}
+            <div className="grid grid-cols-4 gap-4">
+              <div className="bg-white border border-gray-200 rounded-xl p-4">
+                <p className="text-xs text-gray-500 mb-1">Total clients</p>
+                <p className="text-3xl font-semibold text-gray-900">{clients.length}</p>
+                <p className="text-xs text-emerald-600 mt-1">{clients.filter(c => c.status === 'active').length} active</p>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-xl p-4">
+                <p className="text-xs text-gray-500 mb-1">Documents received</p>
+                <p className="text-3xl font-semibold text-emerald-600">{uploadedDocs}</p>
+                <p className="text-xs text-gray-400 mt-1">of {totalDocs} total</p>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-xl p-4">
+                <p className="text-xs text-gray-500 mb-1">Invoices generated</p>
+                <p className="text-3xl font-semibold text-blue-500">0</p>
+                <p className="text-xs text-gray-400 mt-1">Coming soon</p>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-xl p-4">
+                <p className="text-xs text-gray-500 mb-1">Payments received</p>
+                <p className="text-3xl font-semibold text-violet-500">₹0</p>
+                <p className="text-xs text-gray-400 mt-1">Coming soon</p>
+              </div>
+            </div>
+
+            {/* Document status breakdown */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-medium text-gray-700">Document status — client wise</h2>
+                <div className="flex gap-3 text-xs text-gray-500">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span> Uploaded</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> Pending</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block"></span> Overdue</span>
+                </div>
+              </div>
+              {clientDocStats.length === 0 ? (
+                <p className="text-gray-400 text-sm text-center py-6">No clients yet</p>
+              ) : (
+                <div className="space-y-3">
+                  {clientDocStats.map(client => {
+                    const clientDocs = documents.filter(d => d.client_id === client.id)
+                    const verified = clientDocs.filter(d => d.status === 'verified' || d.status === 'uploaded').length
+                    const pending = clientDocs.filter(d => d.status === 'pending').length
+                    const overdue = clientDocs.filter(d => d.status === 'overdue').length
+                    const total = clientDocs.length
+                    const pct = total > 0 ? Math.round(verified / total * 100) : 0
+
+                    return (
+                      <div key={client.id} className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50 cursor-pointer"
+                        onClick={() => router.push(`/ca/client/${client.id}`)}>
+                        <div className="w-8 h-8 bg-emerald-50 rounded-full flex items-center justify-center text-xs font-medium text-emerald-700 flex-shrink-0">
+                          {client.full_name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-sm font-medium text-gray-800">{client.full_name}</p>
+                            <span className="text-xs text-gray-500">{pct}% complete</span>
+                          </div>
+                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                        <div className="flex gap-3 text-xs flex-shrink-0">
+                          <span className="text-emerald-600 font-medium">{verified} ✓</span>
+                          <span className="text-amber-500">{pending} pending</span>
+                          {overdue > 0 && <span className="text-red-500">{overdue} overdue</span>}
+                        </div>
+                        <span className="text-xs text-emerald-600 hover:underline">View →</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Invoices + Payments placeholders */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white border border-dashed border-blue-200 rounded-xl p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-medium text-gray-700">Invoices</h2>
+                  <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">Coming soon</span>
+                </div>
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div>
+                    <p className="text-2xl font-semibold text-gray-900">0</p>
+                    <p className="text-xs text-gray-400">Generated</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-semibold text-blue-500">0</p>
+                    <p className="text-xs text-gray-400">Sent</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-semibold text-amber-500">0</p>
+                    <p className="text-xs text-gray-400">Pending</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white border border-dashed border-violet-200 rounded-xl p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-medium text-gray-700">Payments</h2>
+                  <span className="text-xs bg-violet-50 text-violet-600 px-2 py-0.5 rounded-full">Coming soon</span>
+                </div>
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div>
+                    <p className="text-2xl font-semibold text-emerald-600">₹0</p>
+                    <p className="text-xs text-gray-400">Received</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-semibold text-amber-500">₹0</p>
+                    <p className="text-xs text-gray-400">Pending</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-semibold text-gray-400">₹0</p>
+                    <p className="text-xs text-gray-400">Overdue</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* CLIENTS TAB */}
         {activeTab === 'clients' && (
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -225,12 +342,10 @@ export default function CADashboard() {
                 + Add client
               </button>
             </div>
-
             {clients.length === 0 ? (
               <div className="bg-white border border-dashed border-gray-300 rounded-xl p-12 text-center">
                 <p className="text-gray-400 text-sm mb-3">No clients yet</p>
-                <button
-                  onClick={() => router.push('/ca/add-client')}
+                <button onClick={() => router.push('/ca/add-client')}
                   className="bg-emerald-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-emerald-700">
                   Add your first client
                 </button>
@@ -262,8 +377,7 @@ export default function CADashboard() {
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <button
-                            onClick={() => router.push(`/ca/client/${client.id}`)}
+                          <button onClick={() => router.push(`/ca/client/${client.id}`)}
                             className="text-xs text-emerald-600 hover:underline">
                             View →
                           </button>
@@ -277,12 +391,68 @@ export default function CADashboard() {
           </div>
         )}
 
+        {/* DOCUMENTS TAB */}
         {activeTab === 'documents' && (
-          <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
-            <p className="text-gray-400 text-sm">Document extraction view — coming soon</p>
+          <div className="space-y-4">
+            <div className="grid grid-cols-4 gap-4 mb-2">
+              <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
+                <p className="text-2xl font-semibold text-gray-900">{totalDocs}</p>
+                <p className="text-xs text-gray-500 mt-1">Total</p>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
+                <p className="text-2xl font-semibold text-emerald-600">{uploadedDocs}</p>
+                <p className="text-xs text-gray-500 mt-1">Uploaded</p>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
+                <p className="text-2xl font-semibold text-amber-500">{pendingDocs}</p>
+                <p className="text-xs text-gray-500 mt-1">Pending</p>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
+                <p className="text-2xl font-semibold text-red-500">{overdueDocs}</p>
+                <p className="text-xs text-gray-500 mt-1">Overdue</p>
+              </div>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Client</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Uploaded</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Pending</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Progress</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientDocStats.map(client => {
+                    const pct = client.totalDocs > 0 ? Math.round(client.uploaded / client.totalDocs * 100) : 0
+                    return (
+                      <tr key={client.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium text-gray-900">{client.full_name}</td>
+                        <td className="px-4 py-3 text-emerald-600 font-medium">{client.uploaded}</td>
+                        <td className="px-4 py-3 text-amber-500 font-medium">{client.pending}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 w-24 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className="text-xs text-gray-500">{pct}%</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <button onClick={() => router.push(`/ca/client/${client.id}`)}
+                            className="text-xs text-emerald-600 hover:underline">View →</button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
+        {/* REMINDERS TAB */}
         {activeTab === 'followups' && (
           <FollowupHistory firmId={firmId} clients={clients} />
         )}
@@ -297,21 +467,14 @@ function FollowupHistory({ firmId, clients }: { firmId: string, clients: Client[
   const [followups, setFollowups] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadFollowups()
-  }, [firmId, clients])
+  useEffect(() => { loadFollowups() }, [firmId, clients])
 
   async function loadFollowups() {
     if (!firmId || clients.length === 0) { setLoading(false); return }
     const clientIds = clients.map(c => c.id)
-
     const { data } = await supabase
-      .from('followups')
-      .select('*')
-      .in('client_id', clientIds)
-      .order('sent_at', { ascending: false })
-      .limit(50)
-
+      .from('followups').select('*').in('client_id', clientIds)
+      .order('sent_at', { ascending: false }).limit(50)
     setFollowups(data || [])
     setLoading(false)
   }
@@ -337,53 +500,35 @@ function FollowupHistory({ firmId, clients }: { firmId: string, clients: Client[
     <div className="bg-white border border-dashed border-gray-300 rounded-xl p-12 text-center">
       <p className="text-2xl mb-3">🔔</p>
       <p className="text-gray-400 text-sm">No reminders sent yet</p>
-      <p className="text-gray-400 text-xs mt-1">
-        Click "Send reminders" or wait for the daily auto-reminder at 9 AM
-      </p>
+      <p className="text-gray-400 text-xs mt-1">Click "Send reminders" or wait for the daily auto-reminder at 9 AM</p>
     </div>
   )
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-sm font-medium text-gray-700">
-          Reminder history
-          <span className="ml-2 text-xs text-gray-400 font-normal">
-            {followups.length} total sent
-          </span>
-        </h2>
-      </div>
+      <h2 className="text-sm font-medium text-gray-700">
+        Reminder history
+        <span className="ml-2 text-xs text-gray-400 font-normal">{followups.length} total sent</span>
+      </h2>
       {followups.map(fu => {
         const esc = getEscalationLabel(fu.escalation_step)
         const date = new Date(fu.sent_at)
-        const dateStr = date.toLocaleDateString('en-IN', {
-          day: 'numeric', month: 'short', year: 'numeric'
-        })
-        const timeStr = date.toLocaleTimeString('en-IN', {
-          hour: '2-digit', minute: '2-digit'
-        })
         return (
-          <div key={fu.id}
-            className="bg-white border border-gray-200 rounded-xl p-4">
+          <div key={fu.id} className="bg-white border border-gray-200 rounded-xl p-4">
             <div className="flex items-start justify-between gap-3 mb-2">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium text-gray-900">
-                  {getClientName(fu.client_id)}
-                </span>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${esc.color}`}>
-                  {esc.label}
-                </span>
+                <span className="text-sm font-medium text-gray-900">{getClientName(fu.client_id)}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${esc.color}`}>{esc.label}</span>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                  {fu.channel === 'whatsapp' ? '📱 WhatsApp' : '📧 Email'}
+                  {fu.channel === 'whatsapp' ? '📱 WhatsApp' : fu.channel === 'whatsapp+email' ? '📱+📧 Both' : '📧 Email'}
                 </span>
               </div>
               <span className="text-xs text-gray-400 flex-shrink-0">
-                {dateStr} · {timeStr}
+                {date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                · {date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
-            <p className="text-xs text-gray-600 bg-gray-50 rounded-lg p-3 leading-relaxed">
-              {fu.message}
-            </p>
+            <p className="text-xs text-gray-600 bg-gray-50 rounded-lg p-3 leading-relaxed">{fu.message}</p>
           </div>
         )
       })}
