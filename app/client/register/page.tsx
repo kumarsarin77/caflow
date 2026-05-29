@@ -12,7 +12,7 @@ export default function ClientRegister() {
     full_name: '', email: '', password: '',
     phone: '', pan: '', firm_code: '',
     employment_type: 'Salaried', employer_name: '',
-    annual_income: '', address: ''
+    annual_income: '', address: '', gst_no: ''
   })
 
   async function handleRegister() {
@@ -54,6 +54,8 @@ export default function ClientRegister() {
         email: form.email,
         phone: form.phone,
         pan: form.pan,
+        address: form.address,
+        gst_no: form.gst_no,
         engagement_type: 'ITR filing — AY 2025-26',
         status: 'active'
       }).select().single()
@@ -225,6 +227,15 @@ export default function ClientRegister() {
                 placeholder="Full address"
                 value={form.address}
                 onChange={e => setForm({...form, address: e.target.value})} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">
+                GST number <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                placeholder="22AAAAA0000A1Z5"
+                value={form.gst_no}
+                onChange={e => setForm({...form, gst_no: e.target.value})} />
             </div>
             <button onClick={handleRegister} disabled={loading}
               className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
