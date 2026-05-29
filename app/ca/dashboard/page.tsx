@@ -78,13 +78,11 @@ export default function CADashboard() {
     router.push('/')
   }
 
-  // Document stats
   const totalDocs = documents.length
   const uploadedDocs = documents.filter(d => d.status === 'uploaded' || d.status === 'verified').length
   const pendingDocs = documents.filter(d => d.status === 'pending').length
   const overdueDocs = documents.filter(d => d.status === 'overdue').length
 
-  // Per client document stats
   const clientDocStats = clients.map(client => {
     const clientDocs = documents.filter(d => d.client_id === client.id)
     const uploaded = clientDocs.filter(d => d.status === 'uploaded' || d.status === 'verified').length
@@ -187,7 +185,6 @@ export default function CADashboard() {
       </div>
 
       <div className="max-w-6xl mx-auto p-6">
-
         {/* TABS */}
         <div className="flex gap-2 mb-6 border-b border-gray-200 pb-3">
           {[
@@ -209,8 +206,6 @@ export default function CADashboard() {
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
-
-            {/* Top stats */}
             <div className="grid grid-cols-4 gap-4">
               <div className="bg-white border border-gray-200 rounded-xl p-4">
                 <p className="text-xs text-gray-500 mb-1">Total clients</p>
@@ -234,7 +229,7 @@ export default function CADashboard() {
               </div>
             </div>
 
-            {/* Document status breakdown */}
+            {/* Document status — expandable client wise */}
             <div className="bg-white border border-gray-200 rounded-xl p-5">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-medium text-gray-700">Document status — client wise</h2>
@@ -247,37 +242,24 @@ export default function CADashboard() {
               {clientDocStats.length === 0 ? (
                 <p className="text-gray-400 text-sm text-center py-6">No clients yet</p>
               ) : (
-                <div className="space-y-3">
-                  {clientDocStats.map(client => {
+                <div className="space-y-2">
+                  {clients.map(client => {
                     const clientDocs = documents.filter(d => d.client_id === client.id)
                     const verified = clientDocs.filter(d => d.status === 'verified' || d.status === 'uploaded').length
                     const pending = clientDocs.filter(d => d.status === 'pending').length
                     const overdue = clientDocs.filter(d => d.status === 'overdue').length
-                    const total = clientDocs.length
-                    const pct = total > 0 ? Math.round(verified / total * 100) : 0
-
+                    const pct = clientDocs.length > 0 ? Math.round(verified / clientDocs.length * 100) : 0
                     return (
-                      <div key={client.id} className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50 cursor-pointer"
-                        onClick={() => router.push(`/ca/client/${client.id}`)}>
-                        <div className="w-8 h-8 bg-emerald-50 rounded-full flex items-center justify-center text-xs font-medium text-emerald-700 flex-shrink-0">
-                          {client.full_name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <p className="text-sm font-medium text-gray-800">{client.full_name}</p>
-                            <span className="text-xs text-gray-500">{pct}% complete</span>
-                          </div>
-                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
-                          </div>
-                        </div>
-                        <div className="flex gap-3 text-xs flex-shrink-0">
-                          <span className="text-emerald-600 font-medium">{verified} ✓</span>
-                          <span className="text-amber-500">{pending} pending</span>
-                          {overdue > 0 && <span className="text-red-500">{overdue} overdue</span>}
-                        </div>
-                        <span className="text-xs text-emerald-600 hover:underline">View →</span>
-                      </div>
+                      <ClientDocRow
+                        key={client.id}
+                        client={client}
+                        clientDocs={clientDocs}
+                        verified={verified}
+                        pending={pending}
+                        overdue={overdue}
+                        pct={pct}
+                        onView={() => router.push(`/ca/client/${client.id}`)}
+                      />
                     )
                   })}
                 </div>
@@ -292,18 +274,9 @@ export default function CADashboard() {
                   <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">Coming soon</span>
                 </div>
                 <div className="grid grid-cols-3 gap-3 text-center">
-                  <div>
-                    <p className="text-2xl font-semibold text-gray-900">0</p>
-                    <p className="text-xs text-gray-400">Generated</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-semibold text-blue-500">0</p>
-                    <p className="text-xs text-gray-400">Sent</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-semibold text-amber-500">0</p>
-                    <p className="text-xs text-gray-400">Pending</p>
-                  </div>
+                  <div><p className="text-2xl font-semibold text-gray-900">0</p><p className="text-xs text-gray-400">Generated</p></div>
+                  <div><p className="text-2xl font-semibold text-blue-500">0</p><p className="text-xs text-gray-400">Sent</p></div>
+                  <div><p className="text-2xl font-semibold text-amber-500">0</p><p className="text-xs text-gray-400">Pending</p></div>
                 </div>
               </div>
               <div className="bg-white border border-dashed border-violet-200 rounded-xl p-5">
@@ -312,22 +285,12 @@ export default function CADashboard() {
                   <span className="text-xs bg-violet-50 text-violet-600 px-2 py-0.5 rounded-full">Coming soon</span>
                 </div>
                 <div className="grid grid-cols-3 gap-3 text-center">
-                  <div>
-                    <p className="text-2xl font-semibold text-emerald-600">₹0</p>
-                    <p className="text-xs text-gray-400">Received</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-semibold text-amber-500">₹0</p>
-                    <p className="text-xs text-gray-400">Pending</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-semibold text-gray-400">₹0</p>
-                    <p className="text-xs text-gray-400">Overdue</p>
-                  </div>
+                  <div><p className="text-2xl font-semibold text-emerald-600">₹0</p><p className="text-xs text-gray-400">Received</p></div>
+                  <div><p className="text-2xl font-semibold text-amber-500">₹0</p><p className="text-xs text-gray-400">Pending</p></div>
+                  <div><p className="text-2xl font-semibold text-gray-400">₹0</p><p className="text-xs text-gray-400">Overdue</p></div>
                 </div>
               </div>
             </div>
-
           </div>
         )}
 
@@ -378,9 +341,7 @@ export default function CADashboard() {
                         </td>
                         <td className="px-4 py-3">
                           <button onClick={() => router.push(`/ca/client/${client.id}`)}
-                            className="text-xs text-emerald-600 hover:underline">
-                            View →
-                          </button>
+                            className="text-xs text-emerald-600 hover:underline">View →</button>
                         </td>
                       </tr>
                     ))}
@@ -460,6 +421,73 @@ export default function CADashboard() {
 
       <ChatBot context="ca" contextData={JSON.stringify(clients)} />
     </main>
+  )
+}
+
+function ClientDocRow({ client, clientDocs, verified, pending, overdue, pct, onView }: {
+  client: any
+  clientDocs: any[]
+  verified: number
+  pending: number
+  overdue: number
+  pct: number
+  onView: () => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div className="border border-gray-100 rounded-xl overflow-hidden">
+      <div
+        className="flex items-center gap-4 p-3 hover:bg-gray-50 cursor-pointer"
+        onClick={() => setExpanded(!expanded)}>
+        <div className="w-8 h-8 bg-emerald-50 rounded-full flex items-center justify-center text-xs font-medium text-emerald-700 flex-shrink-0">
+          {client.full_name.charAt(0).toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-gray-800">{client.full_name}</p>
+            <span className="text-xs text-gray-500">{pct}% complete</span>
+          </div>
+          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+        <div className="flex gap-3 text-xs flex-shrink-0">
+          <span className="text-emerald-600 font-medium">{verified} ✓</span>
+          <span className="text-amber-500">{pending} pending</span>
+          {overdue > 0 && <span className="text-red-500">{overdue} overdue</span>}
+        </div>
+        <span className="text-xs text-gray-400 w-4">{expanded ? '▲' : '▼'}</span>
+      </div>
+
+      {expanded && (
+        <div className="border-t border-gray-100 bg-gray-50 px-4 py-3 space-y-2">
+          {clientDocs.map(doc => (
+            <div key={doc.id} className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full flex-shrink-0
+                  ${doc.status === 'verified' ? 'bg-emerald-500' :
+                    doc.status === 'uploaded' ? 'bg-blue-500' :
+                    doc.status === 'overdue' ? 'bg-red-500' : 'bg-amber-400'}`} />
+                <span className="text-xs text-gray-700">{doc.name}</span>
+              </div>
+              <span className={`text-xs px-2 py-0.5 rounded-full
+                ${doc.status === 'verified' ? 'bg-emerald-50 text-emerald-700' :
+                  doc.status === 'uploaded' ? 'bg-blue-50 text-blue-700' :
+                  doc.status === 'overdue' ? 'bg-red-50 text-red-700' :
+                  'bg-amber-50 text-amber-700'}`}>
+                {doc.status}
+              </span>
+            </div>
+          ))}
+          <div className="pt-2 border-t border-gray-200">
+            <button onClick={onView} className="text-xs text-emerald-600 hover:underline">
+              Open client page →
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
