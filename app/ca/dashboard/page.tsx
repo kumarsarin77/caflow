@@ -31,6 +31,9 @@ export default function CADashboard() {
   const [activeTab, setActiveTab] = useState('overview')
   const [notifications, setNotifications] = useState<any[]>([])
   const [showNotifications, setShowNotifications] = useState(false)
+  const [docsExpanded, setDocsExpanded] = useState(true)
+  const [invoicesExpanded, setInvoicesExpanded] = useState(true)
+  const [paymentsExpanded, setPaymentsExpanded] = useState(true)
 
   useEffect(() => { loadDashboard() }, [])
 
@@ -205,7 +208,9 @@ export default function CADashboard() {
 
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (
-          <div className="space-y-6">
+          <div className="space-y-4">
+
+            {/* Top stats */}
             <div className="grid grid-cols-4 gap-4">
               <div className="bg-white border border-gray-200 rounded-xl p-4">
                 <p className="text-xs text-gray-500 mb-1">Total clients</p>
@@ -229,68 +234,134 @@ export default function CADashboard() {
               </div>
             </div>
 
-            {/* Document status — expandable client wise */}
-            <div className="bg-white border border-gray-200 rounded-xl p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-medium text-gray-700">Document status — client wise</h2>
-                <div className="flex gap-3 text-xs text-gray-500">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span> Uploaded</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> Pending</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block"></span> Overdue</span>
+            {/* DOCUMENTS SECTION */}
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              <button
+                onClick={() => setDocsExpanded(!docsExpanded)}
+                className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-gray-700">📋 Document status</span>
+                  <div className="flex gap-2 text-xs">
+                    <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full">{uploadedDocs} uploaded</span>
+                    <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">{pendingDocs} pending</span>
+                    {overdueDocs > 0 && <span className="bg-red-50 text-red-700 px-2 py-0.5 rounded-full">{overdueDocs} overdue</span>}
+                  </div>
                 </div>
-              </div>
-              {clientDocStats.length === 0 ? (
-                <p className="text-gray-400 text-sm text-center py-6">No clients yet</p>
-              ) : (
-                <div className="space-y-2">
-                  {clients.map(client => {
-                    const clientDocs = documents.filter(d => d.client_id === client.id)
-                    const verified = clientDocs.filter(d => d.status === 'verified' || d.status === 'uploaded').length
-                    const pending = clientDocs.filter(d => d.status === 'pending').length
-                    const overdue = clientDocs.filter(d => d.status === 'overdue').length
-                    const pct = clientDocs.length > 0 ? Math.round(verified / clientDocs.length * 100) : 0
-                    return (
-                      <ClientDocRow
-                        key={client.id}
-                        client={client}
-                        clientDocs={clientDocs}
-                        verified={verified}
-                        pending={pending}
-                        overdue={overdue}
-                        pct={pct}
-                        onView={() => router.push(`/ca/client/${client.id}`)}
-                      />
-                    )
-                  })}
+                <span className="text-xs text-gray-400">{docsExpanded ? '▲' : '▼'}</span>
+              </button>
+              {docsExpanded && (
+                <div className="border-t border-gray-100 px-5 py-3">
+                  <div className="flex gap-3 text-xs text-gray-500 mb-3">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span> Uploaded</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> Pending</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block"></span> Overdue</span>
+                  </div>
+                  {clients.length === 0 ? (
+                    <p className="text-gray-400 text-sm text-center py-6">No clients yet</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {clients.map(client => {
+                        const clientDocs = documents.filter(d => d.client_id === client.id)
+                        const verified = clientDocs.filter(d => d.status === 'verified' || d.status === 'uploaded').length
+                        const pending = clientDocs.filter(d => d.status === 'pending').length
+                        const overdue = clientDocs.filter(d => d.status === 'overdue').length
+                        const pct = clientDocs.length > 0 ? Math.round(verified / clientDocs.length * 100) : 0
+                        return (
+                          <ClientDocRow
+                            key={client.id}
+                            client={client}
+                            clientDocs={clientDocs}
+                            verified={verified}
+                            pending={pending}
+                            overdue={overdue}
+                            pct={pct}
+                            onView={() => router.push(`/ca/client/${client.id}`)}
+                          />
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* Invoices + Payments placeholders */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-white border border-dashed border-blue-200 rounded-xl p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-medium text-gray-700">Invoices</h2>
+            {/* INVOICES SECTION */}
+            <div className="bg-white border border-dashed border-blue-200 rounded-xl overflow-hidden">
+              <button
+                onClick={() => setInvoicesExpanded(!invoicesExpanded)}
+                className="w-full flex items-center justify-between px-5 py-4 hover:bg-blue-50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-gray-700">🧾 Invoices</span>
                   <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">Coming soon</span>
+                  <div className="flex gap-2 text-xs">
+                    <span className="bg-gray-50 text-gray-600 px-2 py-0.5 rounded-full">0 generated</span>
+                    <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">0 sent</span>
+                    <span className="bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full">0 pending</span>
+                  </div>
                 </div>
-                <div className="grid grid-cols-3 gap-3 text-center">
-                  <div><p className="text-2xl font-semibold text-gray-900">0</p><p className="text-xs text-gray-400">Generated</p></div>
-                  <div><p className="text-2xl font-semibold text-blue-500">0</p><p className="text-xs text-gray-400">Sent</p></div>
-                  <div><p className="text-2xl font-semibold text-amber-500">0</p><p className="text-xs text-gray-400">Pending</p></div>
+                <span className="text-xs text-gray-400">{invoicesExpanded ? '▲' : '▼'}</span>
+              </button>
+              {invoicesExpanded && (
+                <div className="border-t border-blue-100 px-5 py-4">
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div className="bg-gray-50 rounded-xl p-4">
+                      <p className="text-2xl font-semibold text-gray-900">0</p>
+                      <p className="text-xs text-gray-400 mt-1">Generated</p>
+                    </div>
+                    <div className="bg-blue-50 rounded-xl p-4">
+                      <p className="text-2xl font-semibold text-blue-500">0</p>
+                      <p className="text-xs text-gray-400 mt-1">Sent to clients</p>
+                    </div>
+                    <div className="bg-amber-50 rounded-xl p-4">
+                      <p className="text-2xl font-semibold text-amber-500">0</p>
+                      <p className="text-xs text-gray-400 mt-1">Payment pending</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-400 text-center mt-4">
+                    Invoice generation & tracking coming soon
+                  </p>
                 </div>
-              </div>
-              <div className="bg-white border border-dashed border-violet-200 rounded-xl p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-medium text-gray-700">Payments</h2>
-                  <span className="text-xs bg-violet-50 text-violet-600 px-2 py-0.5 rounded-full">Coming soon</span>
-                </div>
-                <div className="grid grid-cols-3 gap-3 text-center">
-                  <div><p className="text-2xl font-semibold text-emerald-600">₹0</p><p className="text-xs text-gray-400">Received</p></div>
-                  <div><p className="text-2xl font-semibold text-amber-500">₹0</p><p className="text-xs text-gray-400">Pending</p></div>
-                  <div><p className="text-2xl font-semibold text-gray-400">₹0</p><p className="text-xs text-gray-400">Overdue</p></div>
-                </div>
-              </div>
+              )}
             </div>
+
+            {/* PAYMENTS SECTION */}
+            <div className="bg-white border border-dashed border-violet-200 rounded-xl overflow-hidden">
+              <button
+                onClick={() => setPaymentsExpanded(!paymentsExpanded)}
+                className="w-full flex items-center justify-between px-5 py-4 hover:bg-violet-50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-gray-700">💰 Payments</span>
+                  <span className="text-xs bg-violet-50 text-violet-600 px-2 py-0.5 rounded-full">Coming soon</span>
+                  <div className="flex gap-2 text-xs">
+                    <span className="bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">₹0 received</span>
+                    <span className="bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full">₹0 pending</span>
+                  </div>
+                </div>
+                <span className="text-xs text-gray-400">{paymentsExpanded ? '▲' : '▼'}</span>
+              </button>
+              {paymentsExpanded && (
+                <div className="border-t border-violet-100 px-5 py-4">
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div className="bg-emerald-50 rounded-xl p-4">
+                      <p className="text-2xl font-semibold text-emerald-600">₹0</p>
+                      <p className="text-xs text-gray-400 mt-1">Received</p>
+                    </div>
+                    <div className="bg-amber-50 rounded-xl p-4">
+                      <p className="text-2xl font-semibold text-amber-500">₹0</p>
+                      <p className="text-xs text-gray-400 mt-1">Pending</p>
+                    </div>
+                    <div className="bg-red-50 rounded-xl p-4">
+                      <p className="text-2xl font-semibold text-red-400">₹0</p>
+                      <p className="text-xs text-gray-400 mt-1">Overdue</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-400 text-center mt-4">
+                    Razorpay payment integration coming soon
+                  </p>
+                </div>
+              )}
+            </div>
+
           </div>
         )}
 
@@ -459,7 +530,6 @@ function ClientDocRow({ client, clientDocs, verified, pending, overdue, pct, onV
         </div>
         <span className="text-xs text-gray-400 w-4">{expanded ? '▲' : '▼'}</span>
       </div>
-
       {expanded && (
         <div className="border-t border-gray-100 bg-gray-50 px-4 py-3 space-y-2">
           {clientDocs.map(doc => (
