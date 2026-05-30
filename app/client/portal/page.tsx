@@ -188,6 +188,11 @@ export default function ClientPortal() {
           </span>
         </h1>
         <button
+          onClick={() => router.push('/client/profile')}
+          className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5">
+          ⚙️ Profile
+        </button>
+        <button
           onClick={handleSignOut}
           className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5">
           Sign out
