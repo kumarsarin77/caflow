@@ -18,6 +18,8 @@ type Document = {
   client_id: string
   name: string
   status: string
+  due_date: string
+  followup_count: number
 }
 
 type Invoice = {
@@ -94,6 +96,48 @@ export default function CADashboard() {
     router.push('/')
   }
 
+  // Filing readiness score calculation
+  function getFilingScore(clientId: string) {
+    const clientDocs = documents.filter(d => d.client_id === clientId)
+    if (clientDocs.length === 0) return 0
+
+    const total = clientDocs.length
+    const uploaded = clientDocs.filter(d => d.status === 'uploaded' || d.status === 'verified').length
+    const overdue = clientDocs.filter(d => d.status === 'overdue').length
+    const totalFollowups = clientDocs.reduce((sum, d) => sum + (d.followup_count || 0), 0)
+
+    // 60% — documents uploaded
+    const docScore = (uploaded / total) * 60
+
+    // 20% — no overdue docs
+    const overdueScore = overdue === 0 ? 20 : Math.max(0, 20 - (overdue * 5))
+
+    // 10% — no pending reminders (fewer followups = better)
+    const reminderScore = totalFollowups === 0 ? 10 : Math.max(0, 10 - (totalFollowups * 2))
+
+    // 10% — days to deadline (use earliest due date)
+    const dueDates = clientDocs
+      .filter(d => d.due_date)
+      .map(d => new Date(d.due_date).getTime())
+    let deadlineScore = 10
+    if (dueDates.length > 0) {
+      const earliest = Math.min(...dueDates)
+      const daysLeft = Math.ceil((earliest - Date.now()) / (1000 * 60 * 60 * 24))
+      if (daysLeft < 0) deadlineScore = 0
+      else if (daysLeft < 3) deadlineScore = 2
+      else if (daysLeft < 7) deadlineScore = 5
+      else deadlineScore = 10
+    }
+
+    return Math.round(docScore + overdueScore + reminderScore + deadlineScore)
+  }
+
+  function getScoreBadge(score: number) {
+    if (score >= 80) return { label: 'Ready to file', color: 'bg-emerald-50 text-emerald-700 border border-emerald-200' }
+    if (score >= 50) return { label: 'In progress', color: 'bg-amber-50 text-amber-700 border border-amber-200' }
+    return { label: 'Action needed', color: 'bg-red-50 text-red-700 border border-red-200' }
+  }
+
   const totalDocs = documents.length
   const uploadedDocs = documents.filter(d => d.status === 'uploaded' || d.status === 'verified').length
   const pendingDocs = documents.filter(d => d.status === 'pending').length
@@ -102,8 +146,6 @@ export default function CADashboard() {
   const totalInvoices = invoices.length
   const sentInvoices = invoices.filter(i => i.status === 'sent').length
   const paidInvoices = invoices.filter(i => i.status === 'paid').length
-  const pendingInvoices = invoices.filter(i => i.status === 'draft' || i.status === 'sent').length
-  const totalBilled = invoices.reduce((sum, i) => sum + (i.total_amount || 0), 0)
   const totalReceived = invoices.filter(i => i.status === 'paid').reduce((sum, i) => sum + (i.total_amount || 0), 0)
   const totalPending = invoices.filter(i => i.status !== 'paid').reduce((sum, i) => sum + (i.total_amount || 0), 0)
 
@@ -200,13 +242,11 @@ export default function CADashboard() {
             className="text-sm text-amber-600 border border-amber-200 rounded-lg px-3 py-1.5 hover:bg-amber-50">
             Send reminders
           </button>
-          <button
-            onClick={() => router.push('/ca/profile')}
+          <button onClick={() => router.push('/ca/profile')}
             className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5">
             ⚙️ Profile
           </button>
-          <button
-            onClick={handleSignOut}
+          <button onClick={handleSignOut}
             className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5">
             Sign out
           </button>
@@ -270,7 +310,7 @@ export default function CADashboard() {
                 onClick={() => setDocsExpanded(!docsExpanded)}
                 className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors">
                 <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-gray-700">📋 Document status</span>
+                  <span className="text-sm font-medium text-gray-700">📋 Document status & filing readiness</span>
                   <div className="flex gap-2 text-xs">
                     <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full">{uploadedDocs} uploaded</span>
                     <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">{pendingDocs} pending</span>
@@ -281,10 +321,13 @@ export default function CADashboard() {
               </button>
               {docsExpanded && (
                 <div className="border-t border-gray-100 px-5 py-3">
-                  <div className="flex gap-3 text-xs text-gray-500 mb-3">
+                  <div className="flex gap-4 text-xs text-gray-500 mb-3 flex-wrap">
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span> Uploaded</span>
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> Pending</span>
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block"></span> Overdue</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-100 border border-emerald-300 inline-block"></span> Ready to file</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-100 border border-amber-300 inline-block"></span> In progress</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-100 border border-red-300 inline-block"></span> Action needed</span>
                   </div>
                   {clients.length === 0 ? (
                     <p className="text-gray-400 text-sm text-center py-6">No clients yet</p>
@@ -296,6 +339,8 @@ export default function CADashboard() {
                         const pending = clientDocs.filter(d => d.status === 'pending').length
                         const overdue = clientDocs.filter(d => d.status === 'overdue').length
                         const pct = clientDocs.length > 0 ? Math.round(verified / clientDocs.length * 100) : 0
+                        const score = getFilingScore(client.id)
+                        const badge = getScoreBadge(score)
                         return (
                           <ClientDocRow
                             key={client.id}
@@ -305,6 +350,8 @@ export default function CADashboard() {
                             pending={pending}
                             overdue={overdue}
                             pct={pct}
+                            score={score}
+                            badge={badge}
                             onView={() => router.push(`/ca/client/${client.id}`)}
                           />
                         )
@@ -346,8 +393,7 @@ export default function CADashboard() {
                       <p className="text-xs text-gray-400 mt-1">Received</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => router.push('/ca/invoices')}
+                  <button onClick={() => router.push('/ca/invoices')}
                     className="w-full border border-blue-200 text-blue-600 text-sm py-2 rounded-lg hover:bg-blue-50">
                     Manage invoices →
                   </button>
@@ -386,9 +432,7 @@ export default function CADashboard() {
                       <p className="text-xs text-gray-400 mt-1">Overdue</p>
                     </div>
                   </div>
-                  <p className="text-xs text-gray-400 text-center mt-4">
-                    Razorpay payment integration coming soon
-                  </p>
+                  <p className="text-xs text-gray-400 text-center mt-4">Razorpay payment integration coming soon</p>
                 </div>
               )}
             </div>
@@ -400,8 +444,7 @@ export default function CADashboard() {
           <div>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-medium text-gray-700">Client roster</h2>
-              <button
-                onClick={() => router.push('/ca/add-client')}
+              <button onClick={() => router.push('/ca/add-client')}
                 className="bg-emerald-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-emerald-700">
                 + Add client
               </button>
@@ -422,30 +465,46 @@ export default function CADashboard() {
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Client</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Engagement</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Phone</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Filing readiness</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Status</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {clients.map(client => (
-                      <tr key={client.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="px-4 py-3">
-                          <p className="font-medium text-gray-900">{client.full_name}</p>
-                          <p className="text-xs text-gray-500">{client.email}</p>
-                        </td>
-                        <td className="px-4 py-3 text-gray-600">{client.engagement_type}</td>
-                        <td className="px-4 py-3 text-gray-600">{client.phone}</td>
-                        <td className="px-4 py-3">
-                          <span className="bg-emerald-50 text-emerald-700 text-xs px-2 py-1 rounded-full">
-                            {client.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <button onClick={() => router.push(`/ca/client/${client.id}`)}
-                            className="text-xs text-emerald-600 hover:underline">View →</button>
-                        </td>
-                      </tr>
-                    ))}
+                    {clients.map(client => {
+                      const score = getFilingScore(client.id)
+                      const badge = getScoreBadge(score)
+                      return (
+                        <tr key={client.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-gray-900">{client.full_name}</p>
+                            <p className="text-xs text-gray-500">{client.email}</p>
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">{client.engagement_type}</td>
+                          <td className="px-4 py-3 text-gray-600">{client.phone}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="h-1.5 w-16 bg-gray-100 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full ${score >= 80 ? 'bg-emerald-500' : score >= 50 ? 'bg-amber-400' : 'bg-red-400'}`}
+                                  style={{ width: `${score}%` }} />
+                              </div>
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${badge.color}`}>
+                                {score}% · {badge.label}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="bg-emerald-50 text-emerald-700 text-xs px-2 py-1 rounded-full">
+                              {client.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <button onClick={() => router.push(`/ca/client/${client.id}`)}
+                              className="text-xs text-emerald-600 hover:underline">View →</button>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -525,21 +584,22 @@ export default function CADashboard() {
   )
 }
 
-function ClientDocRow({ client, clientDocs, verified, pending, overdue, pct, onView }: {
+function ClientDocRow({ client, clientDocs, verified, pending, overdue, pct, score, badge, onView }: {
   client: any
   clientDocs: any[]
   verified: number
   pending: number
   overdue: number
   pct: number
+  score: number
+  badge: { label: string, color: string }
   onView: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
 
   return (
     <div className="border border-gray-100 rounded-xl overflow-hidden">
-      <div
-        className="flex items-center gap-4 p-3 hover:bg-gray-50 cursor-pointer"
+      <div className="flex items-center gap-4 p-3 hover:bg-gray-50 cursor-pointer"
         onClick={() => setExpanded(!expanded)}>
         <div className="w-8 h-8 bg-emerald-50 rounded-full flex items-center justify-center text-xs font-medium text-emerald-700 flex-shrink-0">
           {client.full_name.charAt(0).toUpperCase()}
@@ -547,16 +607,19 @@ function ClientDocRow({ client, clientDocs, verified, pending, overdue, pct, onV
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-1">
             <p className="text-sm font-medium text-gray-800">{client.full_name}</p>
-            <span className="text-xs text-gray-500">{pct}% complete</span>
+            <span className="text-xs text-gray-500">{pct}% docs complete</span>
           </div>
           <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
             <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
           </div>
         </div>
-        <div className="flex gap-3 text-xs flex-shrink-0">
+        <div className="flex gap-2 text-xs flex-shrink-0 items-center">
           <span className="text-emerald-600 font-medium">{verified} ✓</span>
           <span className="text-amber-500">{pending} pending</span>
           {overdue > 0 && <span className="text-red-500">{overdue} overdue</span>}
+          <span className={`px-2 py-0.5 rounded-full text-xs ${badge.color}`}>
+            {score}% · {badge.label}
+          </span>
         </div>
         <span className="text-xs text-gray-400 w-4">{expanded ? '▲' : '▼'}</span>
       </div>
